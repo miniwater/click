@@ -38,10 +38,19 @@
   function fmt(n) {
     if (n == null || isNaN(n)) return "0";
     const abs = Math.abs(n);
-    if (abs >= 1e12) return (n / 1e12).toFixed(2) + "T";
-    if (abs >= 1e9) return (n / 1e9).toFixed(2) + "B";
-    if (abs >= 1e6) return (n / 1e6).toFixed(2) + "M";
-    if (abs >= 1e4) return (n / 1e3).toFixed(2) + "K";
+    const units = [
+      [1e24, "Y"],
+      [1e21, "Sx"],
+      [1e18, "Qi"],
+      [1e15, "Qa"],
+      [1e12, "T"],
+      [1e9, "B"],
+      [1e6, "M"],
+      [1e3, "K"],
+    ];
+    for (const [value, suffix] of units) {
+      if (abs >= value) return (n / value).toFixed(2) + suffix;
+    }
     if (abs >= 100) return n.toFixed(0);
     if (abs >= 10) return n.toFixed(1);
     return n.toFixed(2);
@@ -80,7 +89,11 @@
             <span class="ico">${d.icon}</span>
             <div class="info">
               <div class="name">${d.name} <span style="color:var(--muted);font-weight:500">×${f.owned}</span></div>
-              <div class="desc">${d.desc} · 单位 ${fmt(f.unitCps)}/s · 强化+${f.enhance}</div>
+              <div class="desc">${d.desc}</div>
+              <div class="facility-detail">
+                <span>单位 ${fmt(f.unitCps)}/s</span>
+                <span>强化 +${f.enhance}</span>
+              </div>
             </div>
             <button type="button" class="buy-btn ${canBuy ? "afford" : ""}" data-act="buy" data-id="${d.id}" ${canBuy ? "" : "disabled"}>购买</button>
             <button type="button" class="enh-btn" data-act="enhance" data-id="${d.id}" title="消耗1钻石，收益×1.01" ${canEnh ? "" : "disabled"}>💎</button>

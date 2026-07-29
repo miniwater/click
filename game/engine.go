@@ -275,11 +275,14 @@ func (e *Engine) doUpgradeClick(c *Client) {
 	e.gold.Sub(e.gold, cost)
 	e.clickLevel++
 	e.dirty = true
-	power := decimalString(ClickPower(e.clickLevel))
+ 	power := decimalString(ClickPower(e.clickLevel))
 	state := e.snapshotLocked()
 	e.mu.Unlock()
 
 	if e.hub != nil {
+		if idx := strings.IndexByte(power, '.'); idx != -1 {
+			power = power[:idx]
+		}
 		e.hub.Notify(fmt.Sprintf("%s 升级了点击收益 → %s/次", c.Name, power), c.Name, c.Color)
 		b, _ := json.Marshal(map[string]any{"type": "state", "state": state})
 		e.hub.Broadcast(b)

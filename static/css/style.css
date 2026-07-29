@@ -161,21 +161,6 @@ html, body {
   pointer-events: none;
 }
 
-.cps-bar-wrap {
-  position: absolute; bottom: 8px; left: 10%; right: 10%;
-  height: 8px;
-  background: rgba(255,255,255,0.08);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.cps-bar {
-  height: 100%;
-  width: 0%;
-  background: linear-gradient(90deg, var(--ok), var(--accent));
-  border-radius: 999px;
-  transition: width 0.05s linear;
-}
-
 .float-num {
   position: absolute;
   pointer-events: none;
@@ -204,10 +189,17 @@ html, body {
 .card .info { flex: 1; min-width: 0; }
 .card .name { font-weight: 650; font-size: 14px; }
 .card .desc { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.meta-line {
-  display: flex; justify-content: space-between;
-  margin-top: 8px; font-size: 12px; color: var(--muted);
-  font-variant-numeric: tabular-nums;
+.status {
+  display: flex; align-items: center; gap: 6px; margin-top: 8px;
+  font-size: 12px; color: #22c55e; font-weight: 600;
+}
+.status-dot {
+  width: 6px; height: 6px; background: #22c55e; border-radius: 50%;
+  box-shadow: 0 0 6px #22c55e; animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 .buy-btn, .enh-btn {
   border: none; border-radius: 10px;
@@ -217,6 +209,7 @@ html, body {
   background: var(--accent);
   color: #fff;
   white-space: nowrap;
+  touch-action: none;
 }
 .buy-btn:disabled, .enh-btn:disabled {
   opacity: 0.4; cursor: not-allowed;
@@ -231,15 +224,6 @@ html, body {
 .facility-list { overflow: auto; flex: 1; padding-right: 2px; }
 .facility-list::-webkit-scrollbar { width: 6px; }
 .facility-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
-
-.progress-mini {
-  height: 4px; background: rgba(255,255,255,0.08); border-radius: 4px; margin-top: 8px; overflow: hidden;
-}
-.progress-mini > i {
-  display: block; height: 100%; width: 0;
-  background: linear-gradient(90deg, var(--gold), var(--ok));
-  border-radius: 4px;
-}
 
 .chat-log {
   flex: 1; overflow: auto;

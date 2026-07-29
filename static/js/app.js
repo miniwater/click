@@ -15,7 +15,6 @@
   const chatLog = $("chatLog");
   const chatForm = $("chatForm");
   const chatInput = $("chatInput");
-  const cpsBar = $("cpsBar");
   const toasts = $("toasts");
 
   let state = null;
@@ -27,9 +26,14 @@
   let lastServerGold = 0;
   let lastServerCPS = 0;
   let lastSync = performance.now();
-  let barT = 0;
   let clickBurst = 0;
   let clickBurstTimer = null;
+  let buyHoldTimer = null;
+  let buyRepeatTimer = null;
+  let suppressBuyClick = false;
+  let upgradeHoldTimer = null;
+  let upgradeRepeatTimer = null;
+  let suppressUpgradeClick = false;
 
   function fmt(n) {
     if (n == null || isNaN(n)) return "0";
@@ -81,11 +85,15 @@
             <button type="button" class="buy-btn ${canBuy ? "afford" : ""}" data-act="buy" data-id="${d.id}" ${canBuy ? "" : "disabled"}>购买</button>
             <button type="button" class="enh-btn" data-act="enhance" data-id="${d.id}" title="消耗1钻石，收益×1.01" ${canEnh ? "" : "disabled"}>💎</button>
           </div>
-          <div class="meta-line">
-            <span>产出 ${fmt(f.cps)}/s</span>
-            <span>🪙 ${fmt(f.cost)}</span>
-          </div>
-          <div class="progress-mini"><i style="width:${f.owned > 0 ? ((barT % 1) * 100) : 0}%"></i></div>
+           <div class="meta-line">
+             <span>产出 ${fmt(f.cps)}/s</span>
+             <span>🪙 ${fmt(f.cost)}</span>
+           </div>
+            ${f.owned > 0 ? `
+            <div class="status">
+              <span class="status-dot"></span>
+              <span>正在运行</span>
+            </div>` : ''}
         </div>`;
       })
       .join("");
@@ -95,11 +103,76 @@
     const btn = e.target.closest("button[data-act]");
     if (!btn || btn.disabled) return;
     const id = +btn.dataset.id;
-    if (btn.dataset.act === "buy") send({ type: "buy", id });
+    if (btn.dataset.act === "buy") {
+      if (suppressBuyClick) {
+        suppressBuyClick = false;
+        return;
+      }
+      send({ type: "buy", id });
+    }
     if (btn.dataset.act === "enhance") send({ type: "enhance", id });
   });
 
-  upgradeClickBtn.addEventListener("click", () => send({ type: "upgrade_click" }));
+  function stopBuyHold() {
+    clearTimeout(buyHoldTimer);
+    clearInterval(buyRepeatTimer);
+    buyHoldTimer = null;
+    buyRepeatTimer = null;
+  }
+
+  facilityList.addEventListener("pointerdown", (e) => {
+    const btn = e.target.closest('button[data-act="buy"]');
+    if (!btn || btn.disabled) return;
+
+    const id = +btn.dataset.id;
+    suppressBuyClick = false;
+    stopBuyHold();
+    buyHoldTimer = setTimeout(() => {
+      suppressBuyClick = true;
+      send({ type: "buy", id });
+      buyRepeatTimer = setInterval(() => send({ type: "buy", id }), 150);
+    }, 400);
+  });
+
+  window.addEventListener("pointerup", stopBuyHold);
+  window.addEventListener("pointercancel", stopBuyHold);
+  window.addEventListener("blur", stopBuyHold);
+
+  upgradeClickBtn.addEventListener("click", () => {
+    if (suppressUpgradeClick) {
+      suppressUpgradeClick = false;
+      return;
+    }
+    send({ type: "upgrade_click" });
+  });
+
+  function stopUpgradeHold() {
+    clearTimeout(upgradeHoldTimer);
+    clearInterval(upgradeRepeatTimer);
+    upgradeHoldTimer = null;
+    upgradeRepeatTimer = null;
+  }
+
+  upgradeClickBtn.addEventListener("pointerdown", () => {
+    if (upgradeClickBtn.disabled) return;
+    suppressUpgradeClick = false;
+    stopUpgradeHold();
+    upgradeHoldTimer = setTimeout(() => {
+      suppressUpgradeClick = true;
+      send({ type: "upgrade_click" });
+      upgradeRepeatTimer = setInterval(() => {
+        if (upgradeClickBtn.disabled) {
+          stopUpgradeHold();
+          return;
+        }
+        send({ type: "upgrade_click" });
+      }, 150);
+    }, 400);
+  });
+
+  window.addEventListener("pointerup", stopUpgradeHold);
+  window.addEventListener("pointercancel", stopUpgradeHold);
+  window.addEventListener("blur", stopUpgradeHold);
 
   function floatText(text, x, y, cls) {
     const el = document.createElement("div");
@@ -256,7 +329,7 @@
     };
   }
 
-  // 本地平滑显示金币 + CPS 进度条
+  // 本地平滑显示自动产出的金币。
   function frame(now) {
     if (state) {
       const dt = (now - lastSync) / 1000;
@@ -264,18 +337,6 @@
       displayGold += (predicted - displayGold) * 0.25;
       goldEl.textContent = fmt(displayGold);
 
-      if (lastServerCPS > 0) {
-        barT = (now / 1000) % 1;
-        cpsBar.style.width = barT * 100 + "%";
-        // 轻量更新设施进度条
-        facilityList.querySelectorAll(".progress-mini > i").forEach((el) => {
-          const card = el.closest(".card");
-          // owned 通过文案判断太脆，始终动画
-          el.style.width = barT * 100 + "%";
-        });
-      } else {
-        cpsBar.style.width = "0%";
-      }
     }
     requestAnimationFrame(frame);
   }

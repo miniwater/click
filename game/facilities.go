@@ -34,8 +34,8 @@ var FacilityDefs = []FacilityDef{
 
 const (
 	ClickBasePower   = 1.0
-	ClickUpgradeMult = 1.5
-	ClickUpgradeBase = 50.0
+	ClickUpgradeMult = 1.05
+	ClickUpgradeBase = 10.0
 	CostGrowth       = 1.05
 	EnhanceMult      = 1.01
 	DiamondChance    = 0.01 // 1%
@@ -46,6 +46,9 @@ func FacilityCost(base float64, owned int) float64 {
 }
 
 func ClickUpgradeCost(level int) float64 {
+	if level < 0 {
+		level = 0
+	}
 	return ClickUpgradeBase * math.Pow(CostGrowth, float64(level))
 }
 

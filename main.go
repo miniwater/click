@@ -1,6 +1,9 @@
 package main
 
 import (
+	"embed"
+	"html/template"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +15,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
+
+//go:embed templates/* static/*
+var webAssets embed.FS
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
@@ -38,8 +44,13 @@ func main() {
 	engine.Start()
 
 	r := gin.Default()
-	r.LoadHTMLGlob("templates/*")
-	r.Static("/static", "./static")
+	tmpl := template.Must(template.ParseFS(webAssets, "templates/*"))
+	r.SetHTMLTemplate(tmpl)
+	staticFS, err := fs.Sub(webAssets, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+	r.StaticFS("/static", http.FS(staticFS))
 
 	r.GET("/", func(c *gin.Context) {
 		c.HTML(http.StatusOK, "index.html", nil)
@@ -62,7 +73,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	addr := ":8080"
+	addr := ":3001"
 	if p := os.Getenv("PORT"); p != "" {
 		addr = ":" + p
 	}

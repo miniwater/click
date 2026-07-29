@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>全民打工 · 放置点击</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">💼</span>
+        <div>
+          <div class="title">全民打工</div>
+          <div class="sub">全员共享 · 一起搬砖</div>
+        </div>
+      </div>
+      <div class="stats">
+        <div class="stat gold">
+          <span class="ico">🪙</span>
+          <div>
+            <div class="label">金币</div>
+            <div class="val" id="gold">0</div>
+          </div>
+        </div>
+        <div class="stat cps">
+          <span class="ico">⚡</span>
+          <div>
+            <div class="label">每秒</div>
+            <div class="val" id="cps">0/s</div>
+          </div>
+        </div>
+        <div class="stat dia">
+          <span class="ico">💎</span>
+          <div>
+            <div class="label">钻石</div>
+            <div class="val" id="diamonds">0</div>
+          </div>
+        </div>
+      </div>
+      <div class="meta">
+        <span id="online">在线 0</span>
+        <span id="me" class="me">连接中…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="center">
+        <div class="click-stage" id="stage">
+          <button type="button" class="big-btn" id="clickBtn" aria-label="点击赚钱">
+            <span class="coin-core">🪙</span>
+            <span class="btn-hint">点击打工</span>
+            <span class="power-tag" id="clickPower">+1</span>
+          </button>
+          <div class="cps-bar-wrap" title="自动产出周期">
+            <div class="cps-bar" id="cpsBar"></div>
+          </div>
+        </div>
+        <div class="toast-area" id="toasts"></div>
+      </section>
+
+      <aside class="side upgrades">
+        <h2>升级 / 设施</h2>
+        <div class="card click-up" id="clickUpgrade">
+          <div class="row">
+            <span class="ico">👆</span>
+            <div class="info">
+              <div class="name">点击收益升级</div>
+              <div class="desc">每次点击 ×1.5</div>
+            </div>
+            <button type="button" class="buy-btn" id="upgradeClickBtn">升级</button>
+          </div>
+          <div class="meta-line">
+            <span id="clickLv">Lv.0</span>
+            <span id="clickCost">🪙 50</span>
+          </div>
+        </div>
+        <div class="facility-list" id="facilityList"></div>
+      </aside>
+
+      <aside class="side chat-panel">
+        <h2>工位聊天 / 动态</h2>
+        <div class="chat-log" id="chatLog"></div>
+        <form class="chat-form" id="chatForm">
+          <input type="text" id="chatInput" maxlength="100" placeholder="说点什么…" autocomplete="off" />
+          <button type="submit">发送</button>
+        </form>
+      </aside>
+    </main>
+  </div>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

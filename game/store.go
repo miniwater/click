@@ -42,6 +42,7 @@ func (s *Store) migrate() error {
 CREATE TABLE IF NOT EXISTS game_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   gold REAL NOT NULL DEFAULT 0,
+  gold_exact TEXT NOT NULL DEFAULT '0',
   diamonds INTEGER NOT NULL DEFAULT 0,
   click_level INTEGER NOT NULL DEFAULT 0,
   facilities TEXT NOT NULL DEFAULT '[]',
@@ -55,11 +56,17 @@ CREATE TABLE IF NOT EXISTS chat_log (
   created_at INTEGER NOT NULL
 );
 `)
-	return err
+	if err != nil {
+		return err
+	}
+	// Existing installations have the original REAL column; keep it for compatibility
+	// and add an exact decimal column for all new saves.
+	_, _ = s.db.Exec(`ALTER TABLE game_state ADD COLUMN gold_exact TEXT NOT NULL DEFAULT '0'`)
+	return nil
 }
 
 type persistedState struct {
-	Gold       float64         `json:"gold"`
+	Gold       string          `json:"gold"`
 	Diamonds   int             `json:"diamonds"`
 	ClickLevel int             `json:"clickLevel"`
 	Facilities []FacilityState `json:"facilities"`
@@ -67,15 +74,21 @@ type persistedState struct {
 }
 
 func (s *Store) Load() (*persistedState, error) {
-	row := s.db.QueryRow(`SELECT gold, diamonds, click_level, facilities, updated_at FROM game_state WHERE id = 1`)
+	row := s.db.QueryRow(`SELECT gold, gold_exact, diamonds, click_level, facilities, updated_at FROM game_state WHERE id = 1`)
 	var p persistedState
 	var facJSON string
-	err := row.Scan(&p.Gold, &p.Diamonds, &p.ClickLevel, &facJSON, &p.UpdatedAt)
+	var legacyGold float64
+	var exactGold string
+	err := row.Scan(&legacyGold, &exactGold, &p.Diamonds, &p.ClickLevel, &facJSON, &p.UpdatedAt)
 	if err == sql.ErrNoRows {
 		return defaultPersisted(), nil
 	}
 	if err != nil {
 		return nil, err
+	}
+	p.Gold = exactGold
+	if p.Gold == "0" && legacyGold != 0 {
+		p.Gold = fmt.Sprintf("%.6f", legacyGold)
 	}
 	if err := json.Unmarshal([]byte(facJSON), &p.Facilities); err != nil {
 		p.Facilities = defaultFacilities()
@@ -90,16 +103,18 @@ func (s *Store) Save(p *persistedState) error {
 		return err
 	}
 	p.UpdatedAt = time.Now().Unix()
+	legacyGold := 0.0
 	_, err = s.db.Exec(`
-INSERT INTO game_state (id, gold, diamonds, click_level, facilities, updated_at)
-VALUES (1, ?, ?, ?, ?, ?)
+INSERT INTO game_state (id, gold, gold_exact, diamonds, click_level, facilities, updated_at)
+VALUES (1, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
   gold=excluded.gold,
+  gold_exact=excluded.gold_exact,
   diamonds=excluded.diamonds,
   click_level=excluded.click_level,
   facilities=excluded.facilities,
   updated_at=excluded.updated_at
-`, p.Gold, p.Diamonds, p.ClickLevel, string(b), p.UpdatedAt)
+	`, legacyGold, p.Gold, p.Diamonds, p.ClickLevel, string(b), p.UpdatedAt)
 	return err
 }
 
@@ -173,7 +188,7 @@ func normalizeFacilities(in []FacilityState) []FacilityState {
 
 func defaultPersisted() *persistedState {
 	return &persistedState{
-		Gold:       0,
+		Gold:       "0",
 		Diamonds:   0,
 		ClickLevel: 0,
 		Facilities: defaultFacilities(),

@@ -1,13 +1,16 @@
 package main
 
 import (
+	"crypto/sha256"
 	"embed"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"click/game"
@@ -28,6 +31,8 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
+	assetVersion := webAssetVersion()
+
 	store, err := game.NewStore("data/game.db")
 	if err != nil {
 		log.Fatal(err)
@@ -44,6 +49,18 @@ func main() {
 	engine.Start()
 
 	r := gin.Default()
+	r.Use(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		switch {
+		case path == "/":
+			c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+			c.Header("Pragma", "no-cache")
+			c.Header("Expires", "0")
+		case strings.HasPrefix(path, "/static/"):
+			c.Header("Cache-Control", "public, max-age=31536000, immutable")
+		}
+		c.Next()
+	})
 	tmpl := template.Must(template.ParseFS(webAssets, "templates/*"))
 	r.SetHTMLTemplate(tmpl)
 	staticFS, err := fs.Sub(webAssets, "static")
@@ -53,7 +70,7 @@ func main() {
 	r.StaticFS("/static", http.FS(staticFS))
 
 	r.GET("/", func(c *gin.Context) {
-		c.HTML(http.StatusOK, "index.html", nil)
+		c.HTML(http.StatusOK, "index.html", gin.H{"AssetVersion": assetVersion})
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
@@ -81,4 +98,16 @@ func main() {
 	if err := r.Run(addr); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func webAssetVersion() string {
+	h := sha256.New()
+	for _, name := range []string{"static/css/style.css", "static/js/app.js"} {
+		data, err := webAssets.ReadFile(name)
+		if err != nil {
+			panic(err)
+		}
+		_, _ = h.Write(data)
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)[:8])
 }

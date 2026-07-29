@@ -22,10 +22,6 @@
   let myColor = "#6c8cff";
   let ws = null;
   let reconnectTimer = null;
-  let displayGold = 0;
-  let lastServerGold = 0;
-  let lastServerCPS = 0;
-  let lastSync = performance.now();
   let clickBurst = 0;
   let clickBurstTimer = null;
   let buyHoldTimer = null;
@@ -36,40 +32,67 @@
   let suppressUpgradeClick = false;
 
   function fmt(n) {
-    if (n == null || isNaN(n)) return "0";
-    const abs = Math.abs(n);
-    const units = [
-      [1e24, "Y"],
-      [1e21, "Sx"],
-      [1e18, "Qi"],
-      [1e15, "Qa"],
-      [1e12, "T"],
-      [1e9, "B"],
-      [1e6, "M"],
-      [1e3, "K"],
-    ];
-    for (const [value, suffix] of units) {
-      if (abs >= value) return (n / value).toFixed(2) + suffix;
+    const value = normalizeDecimal(n);
+    const [integer, fraction = ""] = value.split(".");
+    if (integer.length <= 3) {
+      const decimals = integer.length === 3 ? 0 : integer.length === 2 ? 1 : 2;
+      const tail = fraction.slice(0, decimals).padEnd(decimals, "0");
+      return decimals ? `${integer}.${tail}` : integer;
     }
-    if (abs >= 100) return n.toFixed(0);
-    if (abs >= 10) return n.toFixed(1);
-    return n.toFixed(2);
+
+    const group = Math.floor((integer.length - 1) / 3);
+    const leading = integer.length - group * 3;
+    const digits = (integer + fraction).slice(0, leading + 2).padEnd(leading + 2, "0");
+    const number = digits.slice(0, leading) + "." + digits.slice(leading);
+    return number + unitName(group);
+  }
+
+  function normalizeDecimal(value) {
+    let text = String(value == null ? "0" : value).trim();
+    if (!/^\d+(\.\d+)?$/.test(text)) return "0";
+    let [integer, fraction = ""] = text.split(".");
+    integer = integer.replace(/^0+(?=\d)/, "");
+    fraction = fraction.replace(/0+$/, "");
+    return fraction ? `${integer}.${fraction}` : integer;
+  }
+
+  function compareDecimal(a, b) {
+    const [ai, af = ""] = normalizeDecimal(a).split(".");
+    const [bi, bf = ""] = normalizeDecimal(b).split(".");
+    if (ai.length !== bi.length) return ai.length > bi.length ? 1 : -1;
+    if (ai !== bi) return ai > bi ? 1 : -1;
+    const width = Math.max(af.length, bf.length);
+    const ap = af.padEnd(width, "0");
+    const bp = bf.padEnd(width, "0");
+    return ap === bp ? 0 : ap > bp ? 1 : -1;
+  }
+
+  function unitName(group) {
+    const common = ["", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No"];
+    if (group < common.length) return common[group];
+
+    // Excel-style alphabetic units give an unbounded, deterministic suffix sequence.
+    let index = group - common.length;
+    let suffix = "";
+    do {
+      suffix = String.fromCharCode(65 + (index % 26)) + suffix;
+      index = Math.floor(index / 26) - 1;
+    } while (index >= 0);
+    return "U" + suffix;
   }
 
   function applyState(s, fromClick) {
     if (!s) return;
     state = s;
-    lastServerGold = s.gold;
-    lastServerCPS = s.cps || 0;
-    lastSync = performance.now();
-    if (!fromClick) displayGold = s.gold;
+    goldEl.textContent = fmt(s.gold);
     diaEl.textContent = fmt(s.diamonds);
     cpsEl.textContent = fmt(s.cps) + "/s";
     clickPowerEl.textContent = "+" + fmt(s.clickPower);
     clickLv.textContent = "Lv." + s.clickLevel;
     clickCost.textContent = "🪙 " + fmt(s.clickCost);
-    upgradeClickBtn.disabled = s.gold < s.clickCost;
-    upgradeClickBtn.classList.toggle("afford", s.gold >= s.clickCost);
+    const canUpgradeClick = compareDecimal(s.gold, s.clickCost) >= 0;
+    upgradeClickBtn.disabled = !canUpgradeClick;
+    upgradeClickBtn.classList.toggle("afford", canUpgradeClick);
     renderFacilities();
   }
 
@@ -82,7 +105,7 @@
     facilityList.innerHTML = defs
       .map((d) => {
         const f = map[d.id] || { owned: 0, enhance: 0, cost: d.baseCost, cps: 0, unitCps: d.baseCps };
-        const canBuy = state.gold >= f.cost;
+        const canBuy = compareDecimal(state.gold, f.cost) >= 0;
         const canEnh = state.diamonds >= 1 && f.owned > 0;
         return `<div class="card" data-id="${d.id}">
           <div class="row">
@@ -263,11 +286,16 @@
   }
 
   function toast(text, err) {
+    while (toasts.children.length >= 4) {
+      toasts.firstElementChild.remove();
+    }
     const t = document.createElement("div");
     t.className = "toast" + (err ? " err" : "");
     t.textContent = text;
     toasts.appendChild(t);
-    setTimeout(() => t.remove(), 2800);
+    setTimeout(() => {
+      if (t.isConnected) t.remove();
+    }, 2800);
   }
 
   function esc(s) {
@@ -309,7 +337,6 @@
           meEl.textContent = myName;
           meEl.style.color = myColor;
           applyState(msg.state);
-          displayGold = msg.state.gold;
           onlineEl.textContent = "在线 " + (msg.online || 0);
           chatLog.innerHTML = "";
           (msg.chats || []).forEach(addChatRow);
@@ -319,7 +346,6 @@
           break;
         case "click_result":
           applyState(msg.state, true);
-          displayGold = msg.state.gold;
           if (msg.diamondsGot > 0) {
             const rect = stage.getBoundingClientRect();
             floatText("💎+" + msg.diamondsGot, rect.width / 2, rect.height / 2 - 40, "dia");
@@ -342,18 +368,5 @@
     };
   }
 
-  // 本地平滑显示自动产出的金币。
-  function frame(now) {
-    if (state) {
-      const dt = (now - lastSync) / 1000;
-      const predicted = lastServerGold + lastServerCPS * dt;
-      displayGold += (predicted - displayGold) * 0.25;
-      goldEl.textContent = fmt(displayGold);
-
-    }
-    requestAnimationFrame(frame);
-  }
-
   connect();
-  requestAnimationFrame(frame);
 })();

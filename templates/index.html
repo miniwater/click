@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>全民打工 · 放置点击</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{.AssetVersion}}" />
 </head>
 <body>
   <div id="app">
@@ -70,7 +70,7 @@
           </div>
           <div class="meta-line">
             <span id="clickLv">Lv.0</span>
-            <span id="clickCost">🪙 50</span>
+            <span id="clickCost">🪙 10</span>
           </div>
         </div>
         <div class="facility-list" id="facilityList"></div>
@@ -86,6 +86,6 @@
       </aside>
     </main>
   </div>
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v={{.AssetVersion}}"></script>
 </body>
 </html>

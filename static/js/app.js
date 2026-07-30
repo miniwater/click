@@ -24,6 +24,7 @@
   let reconnectTimer = null;
   let clickBurst = 0;
   let clickBurstTimer = null;
+  let spaceFlushTimer = null;
   let buyHoldTimer = null;
   let buyRepeatTimer = null;
   let suppressBuyClick = false;
@@ -220,7 +221,7 @@
     setTimeout(() => el.remove(), 900);
   }
 
-  function doLocalClick(ev) {
+  function doLocalClick(ev, deferFlush) {
     if (!ws || ws.readyState !== 1) return;
     clickBurst++;
     clickBtn.classList.remove("bounce");
@@ -233,15 +234,19 @@
     const power = state ? state.clickPower : 1;
     floatText("+" + fmt(power), cx - 10 + (Math.random() * 30 - 15), cy - 10, "");
 
-    clearTimeout(clickBurstTimer);
-    clickBurstTimer = setTimeout(flushClicks, 80);
+    if (!deferFlush) {
+      clearTimeout(clickBurstTimer);
+      clickBurstTimer = setTimeout(flushClicks, 80);
+    }
   }
 
   function flushClicks() {
     if (clickBurst <= 0) return;
     const n = clickBurst;
     clickBurst = 0;
-    send({ type: "click", n });
+    for (let remaining = n; remaining > 0; remaining -= 20) {
+      send({ type: "click", n: Math.min(remaining, 20) });
+    }
   }
 
   clickBtn.addEventListener("pointerdown", (e) => {
@@ -249,13 +254,28 @@
     doLocalClick(e);
   });
 
-  // 键盘空格连点
+  function stopSpaceHold() {
+    clearInterval(spaceFlushTimer);
+    spaceFlushTimer = null;
+    flushClicks();
+  }
+
+  // 键盘空格连点按固定周期结算，避免自动重复按键一直推迟发送。
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space" && document.activeElement !== chatInput) {
       e.preventDefault();
-      doLocalClick({ clientX: 0, clientY: 0 });
+      if (!spaceFlushTimer) {
+        clearTimeout(clickBurstTimer);
+        clickBurstTimer = null;
+        spaceFlushTimer = setInterval(flushClicks, 1000);
+      }
+      doLocalClick({ clientX: 0, clientY: 0 }, true);
     }
   });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space" && spaceFlushTimer) stopSpaceHold();
+  });
+  window.addEventListener("blur", stopSpaceHold);
 
   chatForm.addEventListener("submit", (e) => {
     e.preventDefault();

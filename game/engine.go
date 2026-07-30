@@ -32,17 +32,33 @@ type FacilityView struct {
 	UnitCPS string `json:"unitCps"`
 }
 
+type facilityDerived struct {
+	cost        *big.Rat
+	unitCPS     *big.Rat
+	cps         *big.Rat
+	costText    string
+	unitCPSText string
+	cpsText     string
+}
+
 type Engine struct {
-	mu         sync.Mutex
-	gold       *big.Rat
-	diamonds   int
-	clickLevel int
-	facilities []FacilityState
-	lastTick   time.Time
-	store      *Store
-	hub        *Hub
-	rng        *rand.Rand
-	dirty      bool
+	mu             sync.Mutex
+	gold           *big.Rat
+	diamonds       int
+	clickLevel     int
+	clickPower     *big.Rat
+	clickCost      *big.Rat
+	clickPowerText string
+	clickCostText  string
+	facilities     []FacilityState
+	derived        []facilityDerived
+	totalCPS       *big.Rat
+	totalCPSText   string
+	lastTick       time.Time
+	store          *Store
+	hub            *Hub
+	rng            *rand.Rand
+	dirty          bool
 }
 
 func NewEngine(store *Store) (*Engine, error) {
@@ -60,10 +76,11 @@ func NewEngine(store *Store) (*Engine, error) {
 		store:      store,
 		rng:        rand.New(rand.NewSource(now.UnixNano())),
 	}
+	e.initializeDerived()
 	if p.UpdatedAt > 0 {
 		seconds := now.Unix() - p.UpdatedAt
 		if seconds > 0 && seconds < 86400*7 {
-			offline := new(big.Rat).Mul(e.calcCPSLocked(), new(big.Rat).SetInt64(seconds))
+			offline := new(big.Rat).Mul(e.totalCPS, new(big.Rat).SetInt64(seconds))
 			e.gold.Add(e.gold, offline)
 		}
 	}
@@ -99,10 +116,9 @@ func (e *Engine) onTick() {
 	now := time.Now()
 	elapsed := now.Sub(e.lastTick)
 	e.lastTick = now
-	cps := e.calcCPSLocked()
-	if elapsed > 0 && cps.Sign() > 0 {
+	if elapsed > 0 && e.totalCPS.Sign() > 0 {
 		fraction := new(big.Rat).SetFrac(big.NewInt(elapsed.Nanoseconds()), big.NewInt(int64(time.Second)))
-		e.gold.Add(e.gold, new(big.Rat).Mul(cps, fraction))
+		e.gold.Add(e.gold, new(big.Rat).Mul(e.totalCPS, fraction))
 		e.dirty = true
 	}
 	e.mu.Unlock()
@@ -136,12 +152,29 @@ func (e *Engine) ForceSave() {
 	e.persist()
 }
 
-func (e *Engine) calcCPSLocked() *big.Rat {
-	total := new(big.Rat)
+func (e *Engine) initializeDerived() {
+	e.clickPower = ClickPower(e.clickLevel)
+	e.clickCost = ClickUpgradeCost(e.clickLevel)
+	e.clickPowerText = decimalString(e.clickPower)
+	e.clickCostText = decimalString(e.clickCost)
+	e.derived = make([]facilityDerived, len(FacilityDefs))
+	e.totalCPS = new(big.Rat)
 	for i, def := range FacilityDefs {
-		total.Add(total, FacilityCPS(def, e.facilities[i]))
+		st := e.facilities[i]
+		unit := FacilityUnitCPS(def, st.Enhance)
+		cps := new(big.Rat).Mul(unit, new(big.Rat).SetInt64(int64(st.Owned)))
+		cost := FacilityCost(def, st.Owned)
+		e.derived[i] = facilityDerived{
+			cost:        cost,
+			unitCPS:     unit,
+			cps:         cps,
+			costText:    decimalString(cost),
+			unitCPSText: decimalString(unit),
+			cpsText:     decimalString(cps),
+		}
+		e.totalCPS.Add(e.totalCPS, cps)
 	}
-	return total
+	e.totalCPSText = decimalString(e.totalCPS)
 }
 
 func (e *Engine) Snapshot() PublicState {
@@ -152,28 +185,25 @@ func (e *Engine) Snapshot() PublicState {
 
 func (e *Engine) snapshotLocked() PublicState {
 	views := make([]FacilityView, len(FacilityDefs))
-	cps := new(big.Rat)
 	for i, def := range FacilityDefs {
 		st := e.facilities[i]
-		unit := FacilityUnitCPS(def, st.Enhance)
-		facilityCPS := FacilityCPS(def, st)
-		cps.Add(cps, facilityCPS)
+		derived := e.derived[i]
 		views[i] = FacilityView{
 			ID:      def.ID,
 			Owned:   st.Owned,
 			Enhance: st.Enhance,
-			Cost:    decimalString(FacilityCost(def, st.Owned)),
-			CPS:     decimalString(facilityCPS),
-			UnitCPS: decimalString(unit),
+			Cost:    derived.costText,
+			CPS:     derived.cpsText,
+			UnitCPS: derived.unitCPSText,
 		}
 	}
 	return PublicState{
 		Gold:         decimalString(e.gold),
 		Diamonds:     e.diamonds,
 		ClickLevel:   e.clickLevel,
-		ClickPower:   decimalString(ClickPower(e.clickLevel)),
-		ClickCost:    decimalString(ClickUpgradeCost(e.clickLevel)),
-		CPS:          decimalString(cps),
+		ClickPower:   e.clickPowerText,
+		ClickCost:    e.clickCostText,
+		CPS:          e.totalCPSText,
 		Facilities:   views,
 		FacilityDefs: FacilityDefs,
 		ServerTime:   time.Now().UnixMilli(),
@@ -214,7 +244,7 @@ func (e *Engine) doClick(c *Client, n int) {
 		n = 20
 	}
 	e.mu.Lock()
-	gain := new(big.Rat).Mul(ClickPower(e.clickLevel), new(big.Rat).SetInt64(int64(n)))
+	gain := new(big.Rat).Mul(e.clickPower, new(big.Rat).SetInt64(int64(n)))
 	e.gold.Add(e.gold, gain)
 	diamondsGot := 0
 	for i := 0; i < n; i++ {
@@ -244,7 +274,8 @@ func (e *Engine) doBuy(c *Client, id int) {
 		return
 	}
 	def := FacilityDefs[idx]
-	cost := FacilityCost(def, e.facilities[idx].Owned)
+	derived := &e.derived[idx]
+	cost := derived.cost
 	if e.gold.Cmp(cost) < 0 {
 		e.mu.Unlock()
 		e.sendError(c, "金币不够，继续打工吧")
@@ -252,6 +283,12 @@ func (e *Engine) doBuy(c *Client, id int) {
 	}
 	e.gold.Sub(e.gold, cost)
 	e.facilities[idx].Owned++
+	derived.cost.Mul(derived.cost, facilityCostGrowth(def))
+	derived.cps.Add(derived.cps, derived.unitCPS)
+	e.totalCPS.Add(e.totalCPS, derived.unitCPS)
+	derived.costText = decimalString(derived.cost)
+	derived.cpsText = decimalString(derived.cps)
+	e.totalCPSText = decimalString(e.totalCPS)
 	e.dirty = true
 	owned := e.facilities[idx].Owned
 	state := e.snapshotLocked()
@@ -266,7 +303,7 @@ func (e *Engine) doBuy(c *Client, id int) {
 
 func (e *Engine) doUpgradeClick(c *Client) {
 	e.mu.Lock()
-	cost := ClickUpgradeCost(e.clickLevel)
+	cost := e.clickCost
 	if e.gold.Cmp(cost) < 0 {
 		e.mu.Unlock()
 		e.sendError(c, "金币不够升级点击")
@@ -274,8 +311,12 @@ func (e *Engine) doUpgradeClick(c *Client) {
 	}
 	e.gold.Sub(e.gold, cost)
 	e.clickLevel++
+	e.clickPower.Mul(e.clickPower, decimal("1.05"))
+	e.clickCost.Mul(e.clickCost, decimal("1.05"))
+	e.clickPowerText = decimalString(e.clickPower)
+	e.clickCostText = decimalString(e.clickCost)
 	e.dirty = true
- 	power := decimalString(ClickPower(e.clickLevel))
+	power := e.clickPowerText
 	state := e.snapshotLocked()
 	e.mu.Unlock()
 
@@ -308,6 +349,14 @@ func (e *Engine) doEnhance(c *Client, id int) {
 	}
 	e.diamonds--
 	e.facilities[idx].Enhance++
+	derived := &e.derived[idx]
+	e.totalCPS.Sub(e.totalCPS, derived.cps)
+	derived.unitCPS.Mul(derived.unitCPS, decimal("1.01"))
+	derived.cps.Mul(derived.unitCPS, new(big.Rat).SetInt64(int64(e.facilities[idx].Owned)))
+	e.totalCPS.Add(e.totalCPS, derived.cps)
+	derived.unitCPSText = decimalString(derived.unitCPS)
+	derived.cpsText = decimalString(derived.cps)
+	e.totalCPSText = decimalString(e.totalCPS)
 	e.dirty = true
 	enhance := e.facilities[idx].Enhance
 	name := FacilityDefs[idx].Name

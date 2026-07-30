@@ -82,11 +82,14 @@ func ratPow(base *big.Rat, exponent int) *big.Rat {
 }
 
 func FacilityCost(def FacilityDef, owned int) *big.Rat {
-	growth := decimal("1.05")
+	return new(big.Rat).Mul(decimal(def.BaseCost), ratPow(facilityCostGrowth(def), owned))
+}
+
+func facilityCostGrowth(def FacilityDef) *big.Rat {
 	if def.ID >= 21 {
-		growth = decimal("1.25")
+		return decimal("1.25")
 	}
-	return new(big.Rat).Mul(decimal(def.BaseCost), ratPow(growth, owned))
+	return decimal("1.05")
 }
 
 func ClickUpgradeCost(level int) *big.Rat {

@@ -301,6 +301,8 @@
       mouseRepeatTimer = setInterval(() => doLocalClick(point, true), 80);
     }, 400);
   });
+  clickBtn.addEventListener("contextmenu", (e) => e.preventDefault());
+  clickBtn.addEventListener("selectstart", (e) => e.preventDefault());
   window.addEventListener("pointerup", (e) => {
     if (e.pointerType === "mouse" && e.button === 0 && mouseFlushTimer) stopMouseHold();
   });

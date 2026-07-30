@@ -154,6 +154,10 @@ button, a, input { touch-action: manipulation; }
   border-radius: 50%;
   border: none;
   cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   background:
     radial-gradient(circle at 35% 30%, #ffe9a8, #f5b942 45%, #c47a12 80%, #7a4508);
   box-shadow:
@@ -166,6 +170,11 @@ button, a, input { touch-action: manipulation; }
   position: relative;
   color: #3a2200;
   font-weight: 800;
+}
+.big-btn * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .big-btn:active, .big-btn.pressed {
   transform: scale(0.92) translateY(6px);

@@ -59,8 +59,8 @@ CREATE TABLE IF NOT EXISTS chat_log (
 	if err != nil {
 		return err
 	}
-	// Existing installations have the original REAL column; keep it for compatibility
-	// and add an exact decimal column for all new saves.
+	// Existing installations have the original REAL column; keep it for compatibility.
+	// gold_exact now stores the bounded Amount string despite its legacy column name.
 	_, _ = s.db.Exec(`ALTER TABLE game_state ADD COLUMN gold_exact TEXT NOT NULL DEFAULT '0'`)
 	return nil
 }

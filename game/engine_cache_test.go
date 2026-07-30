@@ -1,14 +1,13 @@
 package game
 
 import (
-	"math/big"
 	"math/rand"
 	"testing"
 )
 
 func TestEngineDerivedCacheTracksMutations(t *testing.T) {
 	e := &Engine{
-		gold:       newRat(t, "100000000000000000000000000000000000000000000000000"),
+		gold:       amount("100000000000000000000000000000000000000000000000000"),
 		diamonds:   2,
 		clickLevel: 12,
 		facilities: defaultFacilities(),
@@ -35,34 +34,34 @@ func TestEngineDerivedCacheTracksMutations(t *testing.T) {
 func assertDerivedCache(t *testing.T, e *Engine) {
 	t.Helper()
 	if e.clickPower.Cmp(ClickPower(e.clickLevel)) != 0 {
-		t.Fatalf("cached click power = %s", e.clickPower.RatString())
+		t.Fatalf("cached click power = %s", e.clickPower.String())
 	}
 	if e.clickCost.Cmp(ClickUpgradeCost(e.clickLevel)) != 0 {
-		t.Fatalf("cached click cost = %s", e.clickCost.RatString())
+		t.Fatalf("cached click cost = %s", e.clickCost.String())
 	}
 
-	total := new(big.Rat)
+	total := zeroAmount()
 	for i, def := range FacilityDefs {
 		st := e.facilities[i]
 		derived := e.derived[i]
 		wantCost := FacilityCost(def, st.Owned)
 		wantUnit := FacilityUnitCPS(def, st.Enhance)
 		wantCPS := FacilityCPS(def, st)
-		if derived.cost.Cmp(wantCost) != 0 || derived.costText != decimalString(wantCost) {
+		if derived.cost.Cmp(wantCost) != 0 || derived.costText != wantCost.String() {
 			t.Fatalf("facility %d cached cost is stale", def.ID)
 		}
-		if derived.unitCPS.Cmp(wantUnit) != 0 || derived.unitCPSText != decimalString(wantUnit) {
+		if derived.unitCPS.Cmp(wantUnit) != 0 || derived.unitCPSText != wantUnit.String() {
 			t.Fatalf("facility %d cached unit CPS is stale", def.ID)
 		}
-		if derived.cps.Cmp(wantCPS) != 0 || derived.cpsText != decimalString(wantCPS) {
+		if derived.cps.Cmp(wantCPS) != 0 || derived.cpsText != wantCPS.String() {
 			t.Fatalf("facility %d cached CPS is stale", def.ID)
 		}
 		total.Add(total, wantCPS)
 	}
-	if e.totalCPS.Cmp(total) != 0 || e.totalCPSText != decimalString(total) {
+	if e.totalCPS.Cmp(total) != 0 || e.totalCPSText != total.String() {
 		t.Fatal("cached total CPS is stale")
 	}
-	if e.clickPowerText != decimalString(e.clickPower) || e.clickCostText != decimalString(e.clickCost) {
+	if e.clickPowerText != e.clickPower.String() || e.clickCostText != e.clickCost.String() {
 		t.Fatal("cached click strings are stale")
 	}
 }

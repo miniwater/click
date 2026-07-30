@@ -3,7 +3,6 @@ package game
 import (
 	"encoding/json"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"strings"
 	"sync"
@@ -33,9 +32,9 @@ type FacilityView struct {
 }
 
 type facilityDerived struct {
-	cost        *big.Rat
-	unitCPS     *big.Rat
-	cps         *big.Rat
+	cost        *Amount
+	unitCPS     *Amount
+	cps         *Amount
 	costText    string
 	unitCPSText string
 	cpsText     string
@@ -43,16 +42,16 @@ type facilityDerived struct {
 
 type Engine struct {
 	mu             sync.Mutex
-	gold           *big.Rat
+	gold           *Amount
 	diamonds       int
 	clickLevel     int
-	clickPower     *big.Rat
-	clickCost      *big.Rat
+	clickPower     *Amount
+	clickCost      *Amount
 	clickPowerText string
 	clickCostText  string
 	facilities     []FacilityState
 	derived        []facilityDerived
-	totalCPS       *big.Rat
+	totalCPS       *Amount
 	totalCPSText   string
 	lastTick       time.Time
 	store          *Store
@@ -68,7 +67,7 @@ func NewEngine(store *Store) (*Engine, error) {
 	}
 	now := time.Now()
 	e := &Engine{
-		gold:       decimal(p.Gold),
+		gold:       amount(p.Gold),
 		diamonds:   p.Diamonds,
 		clickLevel: p.ClickLevel,
 		facilities: normalizeFacilities(p.Facilities),
@@ -77,11 +76,15 @@ func NewEngine(store *Store) (*Engine, error) {
 		rng:        rand.New(rand.NewSource(now.UnixNano())),
 	}
 	e.initializeDerived()
+	e.dirty = p.Gold != e.gold.String()
 	if p.UpdatedAt > 0 {
 		seconds := now.Unix() - p.UpdatedAt
 		if seconds > 0 && seconds < 86400*7 {
-			offline := new(big.Rat).Mul(e.totalCPS, new(big.Rat).SetInt64(seconds))
+			offline := zeroAmount().Mul(e.totalCPS, amountInt(seconds))
 			e.gold.Add(e.gold, offline)
+			if offline.Sign() > 0 {
+				e.dirty = true
+			}
 		}
 	}
 	return e, nil
@@ -117,8 +120,8 @@ func (e *Engine) onTick() {
 	elapsed := now.Sub(e.lastTick)
 	e.lastTick = now
 	if elapsed > 0 && e.totalCPS.Sign() > 0 {
-		fraction := new(big.Rat).SetFrac(big.NewInt(elapsed.Nanoseconds()), big.NewInt(int64(time.Second)))
-		e.gold.Add(e.gold, new(big.Rat).Mul(e.totalCPS, fraction))
+		gain := zeroAmount().Quo(zeroAmount().Mul(e.totalCPS, amountInt(elapsed.Nanoseconds())), amountInt(int64(time.Second)))
+		e.gold.Add(e.gold, gain)
 		e.dirty = true
 	}
 	e.mu.Unlock()
@@ -131,7 +134,7 @@ func (e *Engine) persist() {
 		return
 	}
 	p := &persistedState{
-		Gold:       decimalString(e.gold),
+		Gold:       e.gold.String(),
 		Diamonds:   e.diamonds,
 		ClickLevel: e.clickLevel,
 		Facilities: append([]FacilityState(nil), e.facilities...),
@@ -155,26 +158,47 @@ func (e *Engine) ForceSave() {
 func (e *Engine) initializeDerived() {
 	e.clickPower = ClickPower(e.clickLevel)
 	e.clickCost = ClickUpgradeCost(e.clickLevel)
-	e.clickPowerText = decimalString(e.clickPower)
-	e.clickCostText = decimalString(e.clickCost)
+	e.clickPowerText = e.clickPower.String()
+	e.clickCostText = e.clickCost.String()
 	e.derived = make([]facilityDerived, len(FacilityDefs))
-	e.totalCPS = new(big.Rat)
+	e.totalCPS = zeroAmount()
 	for i, def := range FacilityDefs {
 		st := e.facilities[i]
 		unit := FacilityUnitCPS(def, st.Enhance)
-		cps := new(big.Rat).Mul(unit, new(big.Rat).SetInt64(int64(st.Owned)))
+		cps := zeroAmount().Mul(unit, amountInt(int64(st.Owned)))
 		cost := FacilityCost(def, st.Owned)
 		e.derived[i] = facilityDerived{
 			cost:        cost,
 			unitCPS:     unit,
 			cps:         cps,
-			costText:    decimalString(cost),
-			unitCPSText: decimalString(unit),
-			cpsText:     decimalString(cps),
+			costText:    cost.String(),
+			unitCPSText: unit.String(),
+			cpsText:     cps.String(),
 		}
 		e.totalCPS.Add(e.totalCPS, cps)
 	}
-	e.totalCPSText = decimalString(e.totalCPS)
+	e.totalCPSText = e.totalCPS.String()
+}
+
+func (e *Engine) refreshFacilityDerived(idx int) {
+	def := FacilityDefs[idx]
+	st := e.facilities[idx]
+	unit := FacilityUnitCPS(def, st.Enhance)
+	cps := zeroAmount().Mul(unit, amountInt(int64(st.Owned)))
+	cost := FacilityCost(def, st.Owned)
+	e.derived[idx] = facilityDerived{
+		cost:        cost,
+		unitCPS:     unit,
+		cps:         cps,
+		costText:    cost.String(),
+		unitCPSText: unit.String(),
+		cpsText:     cps.String(),
+	}
+	e.totalCPS = zeroAmount()
+	for i := range e.derived {
+		e.totalCPS.Add(e.totalCPS, e.derived[i].cps)
+	}
+	e.totalCPSText = e.totalCPS.String()
 }
 
 func (e *Engine) Snapshot() PublicState {
@@ -198,7 +222,7 @@ func (e *Engine) snapshotLocked() PublicState {
 		}
 	}
 	return PublicState{
-		Gold:         decimalString(e.gold),
+		Gold:         e.gold.String(),
 		Diamonds:     e.diamonds,
 		ClickLevel:   e.clickLevel,
 		ClickPower:   e.clickPowerText,
@@ -244,7 +268,7 @@ func (e *Engine) doClick(c *Client, n int) {
 		n = 20
 	}
 	e.mu.Lock()
-	gain := new(big.Rat).Mul(e.clickPower, new(big.Rat).SetInt64(int64(n)))
+	gain := zeroAmount().Mul(e.clickPower, amountInt(int64(n)))
 	e.gold.Add(e.gold, gain)
 	diamondsGot := 0
 	for i := 0; i < n; i++ {
@@ -260,7 +284,7 @@ func (e *Engine) doClick(c *Client, n int) {
 	if e.hub != nil {
 		b, _ := json.Marshal(map[string]any{
 			"type": "click_result", "name": c.Name, "color": c.Color,
-			"gain": decimalString(gain), "diamondsGot": diamondsGot, "state": state,
+			"gain": gain.String(), "diamondsGot": diamondsGot, "state": state,
 		})
 		e.hub.Broadcast(b)
 	}
@@ -283,12 +307,7 @@ func (e *Engine) doBuy(c *Client, id int) {
 	}
 	e.gold.Sub(e.gold, cost)
 	e.facilities[idx].Owned++
-	derived.cost.Mul(derived.cost, facilityCostGrowth(def))
-	derived.cps.Add(derived.cps, derived.unitCPS)
-	e.totalCPS.Add(e.totalCPS, derived.unitCPS)
-	derived.costText = decimalString(derived.cost)
-	derived.cpsText = decimalString(derived.cps)
-	e.totalCPSText = decimalString(e.totalCPS)
+	e.refreshFacilityDerived(idx)
 	e.dirty = true
 	owned := e.facilities[idx].Owned
 	state := e.snapshotLocked()
@@ -311,19 +330,16 @@ func (e *Engine) doUpgradeClick(c *Client) {
 	}
 	e.gold.Sub(e.gold, cost)
 	e.clickLevel++
-	e.clickPower.Mul(e.clickPower, decimal("1.05"))
-	e.clickCost.Mul(e.clickCost, decimal("1.05"))
-	e.clickPowerText = decimalString(e.clickPower)
-	e.clickCostText = decimalString(e.clickCost)
+	e.clickPower = ClickPower(e.clickLevel)
+	e.clickCost = ClickUpgradeCost(e.clickLevel)
+	e.clickPowerText = e.clickPower.String()
+	e.clickCostText = e.clickCost.String()
 	e.dirty = true
 	power := e.clickPowerText
 	state := e.snapshotLocked()
 	e.mu.Unlock()
 
 	if e.hub != nil {
-		if idx := strings.IndexByte(power, '.'); idx != -1 {
-			power = power[:idx]
-		}
 		e.hub.Notify(fmt.Sprintf("%s 升级了点击收益 → %s/次", c.Name, power), c.Name, c.Color)
 		b, _ := json.Marshal(map[string]any{"type": "state", "state": state})
 		e.hub.Broadcast(b)
@@ -349,14 +365,7 @@ func (e *Engine) doEnhance(c *Client, id int) {
 	}
 	e.diamonds--
 	e.facilities[idx].Enhance++
-	derived := &e.derived[idx]
-	e.totalCPS.Sub(e.totalCPS, derived.cps)
-	derived.unitCPS.Mul(derived.unitCPS, decimal("1.01"))
-	derived.cps.Mul(derived.unitCPS, new(big.Rat).SetInt64(int64(e.facilities[idx].Owned)))
-	e.totalCPS.Add(e.totalCPS, derived.cps)
-	derived.unitCPSText = decimalString(derived.unitCPS)
-	derived.cpsText = decimalString(derived.cps)
-	e.totalCPSText = decimalString(e.totalCPS)
+	e.refreshFacilityDerived(idx)
 	e.dirty = true
 	enhance := e.facilities[idx].Enhance
 	name := FacilityDefs[idx].Name

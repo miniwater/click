@@ -19,7 +19,7 @@
 
 ## Invariants
 
-- Currency values are exact decimal strings at persistence and JSON boundaries and use `math/big.Rat` in Go. Do not reintroduce `float64` arithmetic or parse currency as JavaScript `Number`; `static/js/app.js` intentionally compares and formats decimal strings.
+- Currency uses the fixed 128-bit `Amount` type and bounded scientific strings at persistence/JSON boundaries. Keep legacy plain-decimal loading compatible; do not use SQLite `REAL` or parse whole amounts as JavaScript `Number`. `static/js/app.js` compares mantissa/exponent strings.
 - Facility state order is normalized against `FacilityDefs`; IDs are persisted. Append new unique IDs and do not renumber existing facilities without an explicit data migration.
 - Web assets are compiled into the executable via `go:embed`; rebuild/restart after changing templates, CSS, or JavaScript. `webAssetVersion` hashes only `static/css/style.css` and `static/js/app.js`, so update that list if another independently cached asset is added.
 - State saves every five seconds only when dirty and is force-saved on SIGINT/SIGTERM. Tests should use `t.TempDir()` stores, never the repository's live `data/game.db`.

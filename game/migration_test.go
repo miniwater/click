@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"math/big"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
@@ -11,43 +12,53 @@ import (
 
 func TestFacilityCostGrowth(t *testing.T) {
 	oldCost := FacilityCost(FacilityDefs[19], 2)
-	wantOld := newRat(t, "27562500000000000000000")
-	if oldCost.Cmp(wantOld) != 0 {
-		t.Fatalf("facility 20 cost = %s, want %s", oldCost.RatString(), wantOld.RatString())
+	wantOld := amount("27562500000000000000000")
+	if !amountsClose(oldCost, wantOld) {
+		t.Fatalf("facility 20 cost = %s, want %s", oldCost.String(), wantOld.String())
 	}
 
 	newCost := FacilityCost(FacilityDefs[20], 2)
-	wantNew := newRat(t, "4687500000000000000000000")
-	if newCost.Cmp(wantNew) != 0 {
-		t.Fatalf("facility 21 cost = %s, want %s", newCost.RatString(), wantNew.RatString())
+	wantNew := amount("4687500000000000000000000")
+	if !amountsClose(newCost, wantNew) {
+		t.Fatalf("facility 21 cost = %s, want %s", newCost.String(), wantNew.String())
 	}
 
 	for _, tc := range []struct {
 		id   int
 		want string
 	}{
-		{31, "3/2"},
-		{41, "7/4"},
+		{31, "1.5"},
+		{41, "1.75"},
 		{51, "2"},
 	} {
-		if got := facilityCostGrowth(FacilityDefs[tc.id-1]); got.Cmp(newRat(t, tc.want)) != 0 {
-			t.Fatalf("facility %d growth = %s, want %s", tc.id, got.RatString(), tc.want)
+		if got := facilityCostGrowth(FacilityDefs[tc.id-1]); got.String() != amount(tc.want).String() {
+			t.Fatalf("facility %d growth = %s, want %s", tc.id, got.String(), tc.want)
 		}
 	}
+}
+
+func amountsClose(got, want *Amount) bool {
+	difference := new(big.Float).SetPrec(amountPrecision).Sub(got.v, want.v)
+	difference.Abs(difference)
+	tolerance := new(big.Float).SetPrec(amountPrecision).Mul(
+		new(big.Float).SetPrec(amountPrecision).Abs(want.v),
+		amount("1e-35").v,
+	)
+	return difference.Cmp(tolerance) <= 0
 }
 
 func TestFacilityCatalogAndLegacyNormalization(t *testing.T) {
 	if len(FacilityDefs) != 60 {
 		t.Fatalf("facility count = %d, want 60", len(FacilityDefs))
 	}
-	previousCost := new(big.Rat)
+	previousCost := zeroAmount()
 	legacy := make([]FacilityState, 30)
 	for i, def := range FacilityDefs {
 		if def.ID != i+1 {
 			t.Fatalf("facility index %d has ID %d", i, def.ID)
 		}
-		cost := decimal(def.BaseCost)
-		cps := decimal(def.BaseCPS)
+		cost := amount(def.BaseCost)
+		cps := amount(def.BaseCPS)
 		if cost.Sign() <= 0 || cps.Sign() <= 0 {
 			t.Fatalf("facility %d has invalid economy values", def.ID)
 		}
@@ -72,11 +83,14 @@ func TestFacilityCatalogAndLegacyNormalization(t *testing.T) {
 	}
 }
 
-func TestDecimalStringIsExact(t *testing.T) {
-	value := newRat(t, "123456789012345678901234567890123456789/100000000000000000000")
-	want := "1234567890123456789.01234567890123456789"
-	if got := decimalString(value); got != want {
-		t.Fatalf("decimalString() = %q, want %q", got, want)
+func TestAmountSerializationStaysBounded(t *testing.T) {
+	legacy := strings.Repeat("9", 7000) + "." + strings.Repeat("8", 7000)
+	serialized := amount(legacy).String()
+	if len(serialized) > 50 {
+		t.Fatalf("serialized amount length = %d", len(serialized))
+	}
+	if !strings.Contains(serialized, "e7000") {
+		t.Fatalf("serialized amount = %q", serialized)
 	}
 }
 
@@ -129,11 +143,32 @@ INSERT INTO game_state VALUES (1, 123456789.25, 3, 4, '[]', 0);
 	}
 }
 
-func newRat(t *testing.T, value string) *big.Rat {
-	t.Helper()
-	r, ok := new(big.Rat).SetString(value)
-	if !ok {
-		t.Fatalf("invalid rational %q", value)
+func TestStoreRewritesHugeLegacyGoldAsScientific(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "game.db")
+	store, err := NewStore(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return r
+	defer store.Close()
+	legacy := strings.Repeat("7", 6000) + ".123456789"
+	state := defaultPersisted()
+	state.Gold = legacy
+	if err := store.Save(state); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded.Gold = amount(loaded.Gold).String()
+	if err := store.Save(loaded); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reloaded.Gold) > 50 || !strings.Contains(reloaded.Gold, "e5999") {
+		t.Fatalf("rewritten gold = %q", reloaded.Gold)
+	}
 }

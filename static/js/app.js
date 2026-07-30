@@ -41,38 +41,50 @@
   let facilityPage = null;
 
   function fmt(n) {
-    const value = normalizeDecimal(n);
-    const [integer, fraction = ""] = value.split(".");
-    if (integer.length <= 3) {
+    const value = parseDecimal(n);
+    if (value.zero) return "0.00";
+    if (value.exponent < 3) {
+      const integerDigits = value.exponent + 1;
+      const digits = value.digits.padEnd(Math.max(integerDigits, 1) + 2, "0");
+      const integer = integerDigits > 0 ? digits.slice(0, integerDigits) : "0";
+      const fractionPrefix = integerDigits < 0 ? "0".repeat(-integerDigits) : "";
+      const fraction = fractionPrefix + digits.slice(Math.max(integerDigits, 0));
       const decimals = integer.length === 3 ? 0 : integer.length === 2 ? 1 : 2;
-      const tail = fraction.slice(0, decimals).padEnd(decimals, "0");
-      return decimals ? `${integer}.${tail}` : integer;
+      return decimals ? `${integer}.${fraction.slice(0, decimals).padEnd(decimals, "0")}` : integer;
     }
 
-    const group = Math.floor((integer.length - 1) / 3);
-    const leading = integer.length - group * 3;
-    const digits = (integer + fraction).slice(0, leading + 2).padEnd(leading + 2, "0");
+    const group = Math.floor(value.exponent / 3);
+    const leading = (value.exponent % 3) + 1;
+    const digits = value.digits.slice(0, leading + 2).padEnd(leading + 2, "0");
     const number = digits.slice(0, leading) + "." + digits.slice(leading);
     return number + unitName(group);
   }
 
-  function normalizeDecimal(value) {
+  function parseDecimal(value) {
     let text = String(value == null ? "0" : value).trim();
-    if (!/^\d+(\.\d+)?$/.test(text)) return "0";
-    let [integer, fraction = ""] = text.split(".");
-    integer = integer.replace(/^0+(?=\d)/, "");
-    fraction = fraction.replace(/0+$/, "");
-    return fraction ? `${integer}.${fraction}` : integer;
+    const match = text.match(/^(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i);
+    if (!match) return { zero: true, digits: "0", exponent: 0 };
+    const integer = match[1];
+    const fraction = match[2] || "";
+    const explicitExponent = Number(match[3] || 0);
+    const combined = integer + fraction;
+    const first = combined.search(/[1-9]/);
+    if (first < 0) return { zero: true, digits: "0", exponent: 0 };
+    return {
+      zero: false,
+      digits: combined.slice(first).replace(/0+$/, "") || "0",
+      exponent: explicitExponent + integer.length - first - 1,
+    };
   }
 
   function compareDecimal(a, b) {
-    const [ai, af = ""] = normalizeDecimal(a).split(".");
-    const [bi, bf = ""] = normalizeDecimal(b).split(".");
-    if (ai.length !== bi.length) return ai.length > bi.length ? 1 : -1;
-    if (ai !== bi) return ai > bi ? 1 : -1;
-    const width = Math.max(af.length, bf.length);
-    const ap = af.padEnd(width, "0");
-    const bp = bf.padEnd(width, "0");
+    const av = parseDecimal(a);
+    const bv = parseDecimal(b);
+    if (av.zero || bv.zero) return av.zero === bv.zero ? 0 : av.zero ? -1 : 1;
+    if (av.exponent !== bv.exponent) return av.exponent > bv.exponent ? 1 : -1;
+    const width = Math.max(av.digits.length, bv.digits.length);
+    const ap = av.digits.padEnd(width, "0");
+    const bp = bv.digits.padEnd(width, "0");
     return ap === bp ? 0 : ap > bp ? 1 : -1;
   }
 

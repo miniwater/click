@@ -1,10 +1,5 @@
 package game
 
-import (
-	"math/big"
-	"strings"
-)
-
 type FacilityDef struct {
 	ID       int    `json:"id"`
 	Name     string `json:"name"`
@@ -85,129 +80,41 @@ var FacilityDefs = []FacilityDef{
 
 const DiamondChance = 0.01
 
-func decimal(value string) *big.Rat {
-	r, ok := new(big.Rat).SetString(value)
-	if !ok {
-		return new(big.Rat)
-	}
-	return r
+func FacilityCost(def FacilityDef, owned int) *Amount {
+	return zeroAmount().Mul(amount(def.BaseCost), amountPow(facilityCostGrowth(def), owned))
 }
 
-func ratPow(base *big.Rat, exponent int) *big.Rat {
-	if exponent <= 0 {
-		return new(big.Rat).SetInt64(1)
-	}
-	result := new(big.Rat).SetInt64(1)
-	factor := new(big.Rat).Set(base)
-	for exponent > 0 {
-		if exponent&1 == 1 {
-			result.Mul(result, factor)
-		}
-		exponent >>= 1
-		if exponent > 0 {
-			factor.Mul(factor, factor)
-		}
-	}
-	return result
-}
-
-func FacilityCost(def FacilityDef, owned int) *big.Rat {
-	return new(big.Rat).Mul(decimal(def.BaseCost), ratPow(facilityCostGrowth(def), owned))
-}
-
-func facilityCostGrowth(def FacilityDef) *big.Rat {
+func facilityCostGrowth(def FacilityDef) *Amount {
 	if def.ID >= 51 {
-		return decimal("2")
+		return amount("2")
 	}
 	if def.ID >= 41 {
-		return decimal("1.75")
+		return amount("1.75")
 	}
 	if def.ID >= 31 {
-		return decimal("1.5")
+		return amount("1.5")
 	}
 	if def.ID >= 21 {
-		return decimal("1.25")
+		return amount("1.25")
 	}
-	return decimal("1.05")
+	return amount("1.05")
 }
 
-func ClickUpgradeCost(level int) *big.Rat {
-	return new(big.Rat).Mul(decimal("10"), ratPow(decimal("1.05"), level))
+func ClickUpgradeCost(level int) *Amount {
+	return zeroAmount().Mul(amount("10"), amountPow(amount("1.05"), level))
 }
 
-func ClickPower(level int) *big.Rat {
-	return ratPow(decimal("1.05"), level)
+func ClickPower(level int) *Amount {
+	return amountPow(amount("1.05"), level)
 }
 
-func FacilityUnitCPS(def FacilityDef, enhance int) *big.Rat {
-	return new(big.Rat).Mul(decimal(def.BaseCPS), ratPow(decimal("1.01"), enhance))
+func FacilityUnitCPS(def FacilityDef, enhance int) *Amount {
+	return zeroAmount().Mul(amount(def.BaseCPS), amountPow(amount("1.01"), enhance))
 }
 
-func FacilityCPS(def FacilityDef, st FacilityState) *big.Rat {
+func FacilityCPS(def FacilityDef, st FacilityState) *Amount {
 	if st.Owned <= 0 {
-		return new(big.Rat)
+		return zeroAmount()
 	}
-	return new(big.Rat).Mul(FacilityUnitCPS(def, st.Enhance), new(big.Rat).SetInt64(int64(st.Owned)))
-}
-
-func decimalString(value *big.Rat) string {
-	if value.Sign() == 0 {
-		return "0"
-	}
-
-	numerator := new(big.Int).Set(value.Num())
-	negative := numerator.Sign() < 0
-	numerator.Abs(numerator)
-	denominator := new(big.Int).Set(value.Denom())
-	two := big.NewInt(2)
-	five := big.NewInt(5)
-	remainder := new(big.Int)
-	twos, fives := 0, 0
-	for {
-		remainder.Mod(denominator, two)
-		if remainder.Sign() != 0 {
-			break
-		}
-		denominator.Div(denominator, two)
-		twos++
-	}
-	for {
-		remainder.Mod(denominator, five)
-		if remainder.Sign() != 0 {
-			break
-		}
-		denominator.Div(denominator, five)
-		fives++
-	}
-	if denominator.Cmp(big.NewInt(1)) != 0 {
-		return strings.TrimRight(strings.TrimRight(value.FloatString(18), "0"), ".")
-	}
-
-	scale := twos
-	if fives > scale {
-		scale = fives
-	}
-	if twos < scale {
-		numerator.Mul(numerator, new(big.Int).Exp(two, big.NewInt(int64(scale-twos)), nil))
-	}
-	if fives < scale {
-		numerator.Mul(numerator, new(big.Int).Exp(five, big.NewInt(int64(scale-fives)), nil))
-	}
-	digits := numerator.String()
-	if scale > 0 {
-		if len(digits) <= scale {
-			digits = strings.Repeat("0", scale-len(digits)+1) + digits
-		}
-		point := len(digits) - scale
-		digits = digits[:point] + "." + digits[point:]
-		digits = strings.TrimRight(strings.TrimRight(digits, "0"), ".")
-	}
-	if negative {
-		digits = "-" + digits
-	}
-	s := digits
-	if s == "" || s == "-0" {
-		return "0"
-	}
-	return s
+	return zeroAmount().Mul(FacilityUnitCPS(def, st.Enhance), amountInt(int64(st.Owned)))
 }

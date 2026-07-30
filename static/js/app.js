@@ -12,6 +12,9 @@
   const clickCost = $("clickCost");
   const upgradeClickBtn = $("upgradeClickBtn");
   const facilityList = $("facilityList");
+  const facilityPrev = $("facilityPrev");
+  const facilityNext = $("facilityNext");
+  const facilityPageLabel = $("facilityPageLabel");
   const chatLog = $("chatLog");
   const chatForm = $("chatForm");
   const chatInput = $("chatInput");
@@ -25,12 +28,17 @@
   let clickBurst = 0;
   let clickBurstTimer = null;
   let spaceFlushTimer = null;
+  let mouseHoldTimer = null;
+  let mouseRepeatTimer = null;
+  let mouseFlushTimer = null;
   let buyHoldTimer = null;
   let buyRepeatTimer = null;
   let suppressBuyClick = false;
   let upgradeHoldTimer = null;
   let upgradeRepeatTimer = null;
   let suppressUpgradeClick = false;
+  const facilitiesPerPage = 30;
+  let facilityPage = null;
 
   function fmt(n) {
     const value = normalizeDecimal(n);
@@ -101,9 +109,16 @@
     if (!state) return;
     const defs = state.facilityDefs || [];
     const facs = state.facilities || [];
+    const pageCount = Math.max(1, Math.ceil(defs.length / facilitiesPerPage));
+    if (facilityPage == null) facilityPage = pageCount - 1;
+    facilityPage = Math.max(0, Math.min(facilityPage, pageCount - 1));
+    facilityPageLabel.textContent = `${facilityPage + 1} / ${pageCount}`;
+    facilityPrev.disabled = facilityPage === 0;
+    facilityNext.disabled = facilityPage === pageCount - 1;
     const map = {};
     facs.forEach((f) => (map[f.id] = f));
     facilityList.innerHTML = defs
+      .slice(facilityPage * facilitiesPerPage, (facilityPage + 1) * facilitiesPerPage)
       .map((d) => {
         const f = map[d.id] || { owned: 0, enhance: 0, cost: d.baseCost, cps: 0, unitCps: d.baseCps };
         const canBuy = compareDecimal(state.gold, f.cost) >= 0;
@@ -135,6 +150,15 @@
       })
       .join("");
   }
+
+  function changeFacilityPage(delta) {
+    facilityPage += delta;
+    renderFacilities();
+    facilityList.scrollTop = 0;
+  }
+
+  facilityPrev.addEventListener("click", () => changeFacilityPage(-1));
+  facilityNext.addEventListener("click", () => changeFacilityPage(1));
 
   facilityList.addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-act]");
@@ -249,10 +273,39 @@
     }
   }
 
+  function stopMouseHold() {
+    clearTimeout(mouseHoldTimer);
+    clearInterval(mouseRepeatTimer);
+    clearInterval(mouseFlushTimer);
+    mouseHoldTimer = null;
+    mouseRepeatTimer = null;
+    mouseFlushTimer = null;
+    flushClicks();
+  }
+
   clickBtn.addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    doLocalClick(e);
+    if (e.pointerType !== "mouse") {
+      doLocalClick(e);
+      return;
+    }
+    if (e.button !== 0) return;
+
+    stopMouseHold();
+    clearTimeout(clickBurstTimer);
+    clickBurstTimer = null;
+    const point = { clientX: e.clientX, clientY: e.clientY };
+    doLocalClick(point, true);
+    mouseFlushTimer = setInterval(flushClicks, 1000);
+    mouseHoldTimer = setTimeout(() => {
+      mouseRepeatTimer = setInterval(() => doLocalClick(point, true), 80);
+    }, 400);
   });
+  window.addEventListener("pointerup", (e) => {
+    if (e.pointerType === "mouse" && e.button === 0 && mouseFlushTimer) stopMouseHold();
+  });
+  window.addEventListener("pointercancel", stopMouseHold);
+  window.addEventListener("blur", stopMouseHold);
 
   function stopSpaceHold() {
     clearInterval(spaceFlushTimer);

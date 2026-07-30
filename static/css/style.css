@@ -20,6 +20,7 @@ html, body {
   min-height: 100%;
   max-width: 100%;
   overflow-x: hidden;
+  touch-action: manipulation;
   background:
     radial-gradient(1200px 600px at 10% -10%, #2a1f55 0%, transparent 50%),
     radial-gradient(900px 500px at 100% 0%, #1a3a4a 0%, transparent 45%),
@@ -28,6 +29,8 @@ html, body {
   -webkit-tap-highlight-color: transparent;
   user-select: none;
 }
+
+button, a, input { touch-action: manipulation; }
 
 #app { min-height: 100vh; display: flex; flex-direction: column; }
 
@@ -110,6 +113,34 @@ html, body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.facility-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.facility-heading h2 { margin: 0; }
+.facility-pager { display: flex; align-items: center; gap: 6px; }
+.facility-pager span {
+  min-width: 34px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.facility-pager button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background: var(--panel2);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.facility-pager button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .click-stage {
   position: relative;

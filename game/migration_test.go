@@ -21,6 +21,55 @@ func TestFacilityCostGrowth(t *testing.T) {
 	if newCost.Cmp(wantNew) != 0 {
 		t.Fatalf("facility 21 cost = %s, want %s", newCost.RatString(), wantNew.RatString())
 	}
+
+	for _, tc := range []struct {
+		id   int
+		want string
+	}{
+		{31, "3/2"},
+		{41, "7/4"},
+		{51, "2"},
+	} {
+		if got := facilityCostGrowth(FacilityDefs[tc.id-1]); got.Cmp(newRat(t, tc.want)) != 0 {
+			t.Fatalf("facility %d growth = %s, want %s", tc.id, got.RatString(), tc.want)
+		}
+	}
+}
+
+func TestFacilityCatalogAndLegacyNormalization(t *testing.T) {
+	if len(FacilityDefs) != 60 {
+		t.Fatalf("facility count = %d, want 60", len(FacilityDefs))
+	}
+	previousCost := new(big.Rat)
+	legacy := make([]FacilityState, 30)
+	for i, def := range FacilityDefs {
+		if def.ID != i+1 {
+			t.Fatalf("facility index %d has ID %d", i, def.ID)
+		}
+		cost := decimal(def.BaseCost)
+		cps := decimal(def.BaseCPS)
+		if cost.Sign() <= 0 || cps.Sign() <= 0 {
+			t.Fatalf("facility %d has invalid economy values", def.ID)
+		}
+		if i > 0 && cost.Cmp(previousCost) <= 0 {
+			t.Fatalf("facility %d base cost is not increasing", def.ID)
+		}
+		previousCost = cost
+		if i < len(legacy) {
+			legacy[i] = FacilityState{ID: def.ID, Owned: i + 1, Enhance: i}
+		}
+	}
+
+	normalized := normalizeFacilities(legacy)
+	if len(normalized) != 60 {
+		t.Fatalf("normalized facility count = %d, want 60", len(normalized))
+	}
+	if normalized[29] != legacy[29] {
+		t.Fatal("legacy facility state was not preserved")
+	}
+	if normalized[30] != (FacilityState{ID: 31}) || normalized[59] != (FacilityState{ID: 60}) {
+		t.Fatal("new facility defaults were not appended")
+	}
 }
 
 func TestDecimalStringIsExact(t *testing.T) {

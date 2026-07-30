@@ -21,9 +21,9 @@
 
 ## 截图
 
-![pc](./pc.avif)
+![pc](./data/pc.avif)
 
-![moblie](./mobile.avif)
+![moblie](./data/mobile.avif)
 
 ## 游戏机制
 

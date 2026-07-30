@@ -22,9 +22,9 @@ A real-time multiplayer idle clicker game where everyone shares the same game wo
 
 ## Screenshot
 
-![pc](./pc.avif)
+![pc](./data/pc.avif)
 
-![moblie](./mobile.avif)
+![moblie](./data/mobile.avif)
 
 ## Game Mechanics
 

@@ -1,0 +1,24 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Go source
+*.go text eol=lf
+
+# Web assets
+*.js text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+
+# Documentation
+*.md text eol=lf
+
+# Configuration
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# Binary files (should not be committed, but mark them just in case)
+*.exe binary
+*.db binary

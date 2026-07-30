@@ -102,7 +102,7 @@ func main() {
 
 func webAssetVersion() string {
 	h := sha256.New()
-	for _, name := range []string{"static/css/style.css", "static/js/app.js"} {
+	for _, name := range []string{"static/css/style.css", "static/js/app.js", "static/favicon.avif"} {
 		data, err := webAssets.ReadFile(name)
 		if err != nil {
 			panic(err)

@@ -40,6 +40,20 @@ type facilityDerived struct {
 	cpsText     string
 }
 
+type clickResult struct {
+	Name        string `json:"name"`
+	Color       string `json:"color"`
+	Gain        string `json:"gain"`
+	DiamondsGot int    `json:"diamondsGot"`
+}
+
+type pendingClick struct {
+	name        string
+	color       string
+	gain        *Amount
+	diamondsGot int
+}
+
 type Engine struct {
 	mu             sync.Mutex
 	gold           *Amount
@@ -57,6 +71,7 @@ type Engine struct {
 	store          *Store
 	hub            *Hub
 	rng            *rand.Rand
+	pendingClicks  map[*Client]*pendingClick
 	dirty          bool
 }
 
@@ -95,15 +110,19 @@ func (e *Engine) Start()        { go e.loop() }
 
 func (e *Engine) loop() {
 	tick := time.NewTicker(100 * time.Millisecond)
+	clickPush := time.NewTicker(300 * time.Millisecond)
 	push := time.NewTicker(time.Second)
 	save := time.NewTicker(5 * time.Second)
 	defer tick.Stop()
+	defer clickPush.Stop()
 	defer push.Stop()
 	defer save.Stop()
 	for {
 		select {
 		case <-tick.C:
 			e.onTick()
+		case <-clickPush.C:
+			e.flushClickResults()
 		case <-push.C:
 			if e.hub != nil {
 				e.hub.BroadcastState()
@@ -278,16 +297,45 @@ func (e *Engine) doClick(c *Client, n int) {
 		}
 	}
 	e.dirty = true
+	if e.pendingClicks == nil {
+		e.pendingClicks = make(map[*Client]*pendingClick)
+	}
+	pending := e.pendingClicks[c]
+	if pending == nil {
+		pending = &pendingClick{name: c.Name, color: c.Color, gain: zeroAmount()}
+		e.pendingClicks[c] = pending
+	}
+	pending.gain.Add(pending.gain, gain)
+	pending.diamondsGot += diamondsGot
+	e.mu.Unlock()
+}
+
+func (e *Engine) flushClickResults() {
+	e.mu.Lock()
+	if len(e.pendingClicks) == 0 {
+		e.mu.Unlock()
+		return
+	}
+	results := make([]clickResult, 0, len(e.pendingClicks))
+	for _, pending := range e.pendingClicks {
+		results = append(results, clickResult{
+			Name:        pending.name,
+			Color:       pending.color,
+			Gain:        pending.gain.String(),
+			DiamondsGot: pending.diamondsGot,
+		})
+	}
+	e.pendingClicks = make(map[*Client]*pendingClick)
 	state := e.snapshotLocked()
 	e.mu.Unlock()
 
-	if e.hub != nil {
-		b, _ := json.Marshal(map[string]any{
-			"type": "click_result", "name": c.Name, "color": c.Color,
-			"gain": gain.String(), "diamondsGot": diamondsGot, "state": state,
-		})
-		e.hub.Broadcast(b)
+	if e.hub == nil {
+		return
 	}
+	b, _ := json.Marshal(map[string]any{
+		"type": "click_result", "results": results, "state": state,
+	})
+	e.hub.Broadcast(b)
 }
 
 func (e *Engine) doBuy(c *Client, id int) {

@@ -38,6 +38,7 @@
   let upgradeRepeatTimer = null;
   let suppressUpgradeClick = false;
   const facilitiesPerPage = 30;
+  const clickFlushInterval = 300;
   let facilityPage = null;
 
   function fmt(n) {
@@ -308,7 +309,7 @@
     clickBurstTimer = null;
     const point = { clientX: e.clientX, clientY: e.clientY };
     doLocalClick(point, true);
-    mouseFlushTimer = setInterval(flushClicks, 1000);
+    mouseFlushTimer = setInterval(flushClicks, clickFlushInterval);
     mouseHoldTimer = setTimeout(() => {
       mouseRepeatTimer = setInterval(() => doLocalClick(point, true), 80);
     }, 400);
@@ -334,7 +335,7 @@
       if (!spaceFlushTimer) {
         clearTimeout(clickBurstTimer);
         clickBurstTimer = null;
-        spaceFlushTimer = setInterval(flushClicks, 1000);
+        spaceFlushTimer = setInterval(flushClicks, clickFlushInterval);
       }
       doLocalClick({ clientX: 0, clientY: 0 }, true);
     }
@@ -433,11 +434,12 @@
           break;
         case "click_result":
           applyState(msg.state, true);
-          if (msg.diamondsGot > 0) {
+          (msg.results || []).forEach((result) => {
+            if (result.name !== myName || result.diamondsGot <= 0) return;
             const rect = stage.getBoundingClientRect();
-            floatText("💎+" + msg.diamondsGot, rect.width / 2, rect.height / 2 - 40, "dia");
-            if (msg.name === myName) toast("幸运！获得钻石 ×" + msg.diamondsGot);
-          }
+            floatText("💎+" + result.diamondsGot, rect.width / 2, rect.height / 2 - 40, "dia");
+            toast("幸运！获得钻石 ×" + result.diamondsGot);
+          });
           break;
         case "chat":
           addChatRow(msg.chat);

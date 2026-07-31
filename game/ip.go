@@ -54,12 +54,12 @@ func ThemeColorFromIP(ipStr string) string {
 	return fmt.Sprintf("hsl(%d, %d%%, %d%%)", hue, sat, light)
 }
 
-func ClientIP(remoteAddr, xff, xri string, trustProxy bool) string {
-	if trustProxy && xff != "" {
+func ClientIP(remoteAddr, xff, xri string) string {
+	if xff != "" {
 		parts := strings.Split(xff, ",")
 		return strings.TrimSpace(parts[0])
 	}
-	if trustProxy && xri != "" {
+	if xri != "" {
 		return strings.TrimSpace(xri)
 	}
 	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {

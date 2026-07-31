@@ -85,8 +85,7 @@ func main() {
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
-		trustProxy := strings.EqualFold(os.Getenv("TRUST_PROXY"), "true")
-		ip := game.ClientIP(c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), c.GetHeader("X-Real-IP"), trustProxy)
+		ip := game.ClientIP(c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), c.GetHeader("X-Real-IP"))
 		if !hub.Admit(ip) {
 			c.AbortWithStatus(http.StatusTooManyRequests)
 			return

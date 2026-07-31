@@ -105,7 +105,6 @@ Visit [http://localhost:3001](http://localhost:3001).
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `PORT` | `3001` | HTTP listen port |
-| `TRUST_PROXY` | `false` | Trust `X-Forwarded-For`/`X-Real-IP`; enable only when the server is reachable exclusively through a trusted reverse proxy |
 
 The database path is fixed to `data/game.db` relative to the working directory. WebSocket protection limits a single process to 10,000 connections and each source IP to 40 connections. These are safety ceilings, not capacity guarantees; load-test the target host before production traffic.
 
@@ -120,7 +119,7 @@ The database path is fixed to `data/game.db` relative to the working directory. 
 
 Persist the entire `data/` directory across restarts to preserve progress.
 
-When deploying behind a reverse proxy, keep the application port private and set `TRUST_PROXY=true`. Do not enable it when clients can reach the application directly, because clients could spoof forwarding headers and bypass IP-based controls.
+When deploying behind a reverse proxy, configure it to overwrite client-provided `X-Forwarded-For` and `X-Real-IP` headers, and keep the application port private.
 
 ## Building
 

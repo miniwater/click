@@ -6,6 +6,8 @@
 
 > **中文文档** → [README.zh-CN.md](README.zh-CN.md)
 
+**Live Demo:** [https://nocodb.krjojo.com/](https://nocodb.krjojo.com/)
+
 A real-time multiplayer idle clicker game where everyone shares the same game world. Click to earn gold, buy facilities, enhance with diamonds, and work your way from a tiny office to a multiversal corporation.
 
 ## Features

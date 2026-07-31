@@ -6,6 +6,8 @@
 
 > **English** → [README.md](README.md)
 
+**在线演示：** [https://nocodb.krjojo.com/](https://nocodb.krjojo.com/)
+
 一款实时多人在线放置点击游戏。所有玩家共享同一个游戏世界，点击赚金币、购买设施、用钻石强化，一起从打工起步走向多元宇宙集团。
 
 ## 功能特点

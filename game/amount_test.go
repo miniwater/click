@@ -29,12 +29,21 @@ func TestHighLevelEconomyStringsStayBounded(t *testing.T) {
 	values := []*Amount{
 		ClickPower(100000),
 		ClickUpgradeCost(100000),
-		FacilityCost(FacilityDefs[59], 100000),
-		FacilityUnitCPS(FacilityDefs[59], 100000),
+		FacilityCost(FacilityDefs[89], 100000),
+		FacilityUnitCPS(FacilityDefs[89], 100000),
 	}
 	for _, value := range values {
 		if value.Sign() <= 0 || len(value.String()) > 50 {
 			t.Fatalf("invalid high-level amount %q", value.String())
+		}
+	}
+}
+
+func TestClickUpgradeCostsOneHundredClicks(t *testing.T) {
+	for _, level := range []int{0, 1, 100, 100000} {
+		want := zeroAmount().Mul(ClickPower(level), amount("100"))
+		if got := ClickUpgradeCost(level); got.Cmp(want) != 0 {
+			t.Fatalf("level %d click upgrade cost = %s, want %s", level, got.String(), want.String())
 		}
 	}
 }

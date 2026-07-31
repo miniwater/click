@@ -38,6 +38,7 @@
   let upgradeRepeatTimer = null;
   let suppressUpgradeClick = false;
   const facilitiesPerPage = 30;
+  const facilityPageNames = ["科技", "修仙", "魔法"];
   const clickFlushInterval = 300;
   let facilityPage = null;
 
@@ -125,7 +126,8 @@
     const pageCount = Math.max(1, Math.ceil(defs.length / facilitiesPerPage));
     if (facilityPage == null) facilityPage = pageCount - 1;
     facilityPage = Math.max(0, Math.min(facilityPage, pageCount - 1));
-    facilityPageLabel.textContent = `${facilityPage + 1} / ${pageCount}`;
+    const pageName = facilityPageNames[facilityPage];
+    facilityPageLabel.textContent = `${pageName ? `${pageName} · ` : ""}${facilityPage + 1} / ${pageCount}`;
     facilityPrev.disabled = facilityPage === 0;
     facilityNext.disabled = facilityPage === pageCount - 1;
     const map = {};
@@ -148,7 +150,7 @@
               </div>
             </div>
             <button type="button" class="buy-btn ${canBuy ? "afford" : ""}" data-act="buy" data-id="${d.id}" ${canBuy ? "" : "disabled"}>购买</button>
-            <button type="button" class="enh-btn" data-act="enhance" data-id="${d.id}" title="消耗1钻石，收益×1.01" ${canEnh ? "" : "disabled"}>💎</button>
+            <button type="button" class="enh-btn" data-act="enhance" data-id="${d.id}" title="消耗1钻石，每级提升收益，强化每10级额外翻倍" ${canEnh ? "" : "disabled"}>💎</button>
           </div>
            <div class="meta-line">
              <span>产出 ${fmt(f.cps)}/s</span>

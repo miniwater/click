@@ -30,10 +30,38 @@ func TestFacilityCostGrowth(t *testing.T) {
 		{31, "1.5"},
 		{41, "1.75"},
 		{51, "2"},
+		{61, "2.5"},
+		{71, "3"},
+		{81, "4"},
 	} {
 		if got := facilityCostGrowth(FacilityDefs[tc.id-1]); got.String() != amount(tc.want).String() {
 			t.Fatalf("facility %d growth = %s, want %s", tc.id, got.String(), tc.want)
 		}
+	}
+}
+
+func TestFacilityEnhanceGrowth(t *testing.T) {
+	for _, tc := range []struct {
+		id   int
+		want string
+	}{
+		{1, "1.1"},
+		{31, "1.2"},
+		{61, "1.35"},
+	} {
+		if got := facilityEnhanceGrowth(FacilityDefs[tc.id-1]); got.String() != amount(tc.want).String() {
+			t.Fatalf("facility %d enhance growth = %s, want %s", tc.id, got.String(), tc.want)
+		}
+	}
+	base := amount(FacilityDefs[60].BaseCPS)
+	levelTen := FacilityUnitCPS(FacilityDefs[60], 10)
+	wantLevelTen := zeroAmount().Mul(base, amountPow(amount("1.35"), 10))
+	wantLevelTen.Mul(wantLevelTen, amount("2"))
+	if !amountsClose(levelTen, wantLevelTen) {
+		t.Fatalf("level 10 unit CPS = %s, want %s", levelTen.String(), wantLevelTen.String())
+	}
+	if base.Sign() <= 0 || levelTen.Cmp(base) <= 0 {
+		t.Fatal("enhanced facility did not improve")
 	}
 }
 
@@ -48,8 +76,8 @@ func amountsClose(got, want *Amount) bool {
 }
 
 func TestFacilityCatalogAndLegacyNormalization(t *testing.T) {
-	if len(FacilityDefs) != 60 {
-		t.Fatalf("facility count = %d, want 60", len(FacilityDefs))
+	if len(FacilityDefs) != 90 {
+		t.Fatalf("facility count = %d, want 90", len(FacilityDefs))
 	}
 	previousCost := zeroAmount()
 	legacy := make([]FacilityState, 30)
@@ -72,14 +100,27 @@ func TestFacilityCatalogAndLegacyNormalization(t *testing.T) {
 	}
 
 	normalized := normalizeFacilities(legacy)
-	if len(normalized) != 60 {
-		t.Fatalf("normalized facility count = %d, want 60", len(normalized))
+	if len(normalized) != 90 {
+		t.Fatalf("normalized facility count = %d, want 90", len(normalized))
 	}
 	if normalized[29] != legacy[29] {
 		t.Fatal("legacy facility state was not preserved")
 	}
-	if normalized[30] != (FacilityState{ID: 31}) || normalized[59] != (FacilityState{ID: 60}) {
+	if normalized[30] != (FacilityState{ID: 31}) || normalized[89] != (FacilityState{ID: 90}) {
 		t.Fatal("new facility defaults were not appended")
+	}
+}
+
+func TestMagicFacilityEconomy(t *testing.T) {
+	first := FacilityDefs[60]
+	if first.BaseCost != "1e1000" {
+		t.Fatalf("first magic facility cost = %s, want 1e1000", first.BaseCost)
+	}
+	for _, def := range FacilityDefs[60:] {
+		payback := zeroAmount().Quo(amount(def.BaseCost), amount(def.BaseCPS))
+		if payback.Cmp(amount("3599.99")) < 0 || payback.Cmp(amount("3600.01")) > 0 {
+			t.Fatalf("facility %d base payback = %s seconds, want 3600", def.ID, payback.String())
+		}
 	}
 }
 

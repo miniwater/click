@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -142,7 +143,10 @@ func (s *Store) RecentChat(limit int) ([]ChatRow, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	rows, err := s.db.Query(fmt.Sprintf(`SELECT id, name, color, text, created_at FROM chat_log ORDER BY id DESC LIMIT %d`, limit))
+	if limit > 200 {
+		limit = 200
+	}
+	rows, err := s.db.Query(`SELECT id, name, color, text, created_at FROM chat_log ORDER BY id DESC LIMIT ` + strconv.Itoa(limit))
 	if err != nil {
 		return nil, err
 	}

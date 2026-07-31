@@ -8,10 +8,12 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"click/game"
 
@@ -26,7 +28,12 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Non-browser WebSocket clients do not have an Origin.
+		}
+		u, err := url.Parse(origin)
+		return err == nil && u.Host != "" && strings.EqualFold(u.Host, r.Host)
 	},
 }
 
@@ -50,6 +57,10 @@ func main() {
 
 	r := gin.Default()
 	r.Use(func(c *gin.Context) {
+		c.Header("Content-Security-Policy", "default-src 'self'; script-src 'self' https://um.krjojo.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss: https://um.krjojo.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		c.Header("X-Content-Type-Options", "nosniff")
+		c.Header("X-Frame-Options", "DENY")
+		c.Header("Referrer-Policy", "no-referrer")
 		path := c.Request.URL.Path
 		switch {
 		case path == "/":
@@ -74,11 +85,17 @@ func main() {
 	})
 
 	r.GET("/ws", func(c *gin.Context) {
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
+		trustProxy := strings.EqualFold(os.Getenv("TRUST_PROXY"), "true")
+		ip := game.ClientIP(c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), c.GetHeader("X-Real-IP"), trustProxy)
+		if !hub.Admit(ip) {
+			c.AbortWithStatus(http.StatusTooManyRequests)
 			return
 		}
-		ip := game.ClientIP(c.Request.RemoteAddr, c.GetHeader("X-Forwarded-For"), c.GetHeader("X-Real-IP"))
+		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			hub.Release(ip)
+			return
+		}
 		game.ServeWS(hub, conn, ip)
 	})
 
@@ -95,7 +112,14 @@ func main() {
 		addr = ":" + p
 	}
 	log.Println("全民打工 running at http://localhost" + addr)
-	if err := r.Run(addr); err != nil {
+	server := &http.Server{
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    16 << 10,
+	}
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

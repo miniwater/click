@@ -1,6 +1,6 @@
 # 全民打工 · 放置点击游戏
 
-[![Go version](https://img.shields.io/badge/go-1.26.3-blue)](go.mod)
+[![Go version](https://img.shields.io/badge/go-1.26.5-blue)](go.mod)
 [![CI](https://github.com/miniwater/click/actions/workflows/ci.yml/badge.svg)](https://github.com/miniwater/click/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -53,7 +53,7 @@
 
 ## 技术栈
 
-- **语言** Go 1.26.3
+- **语言** Go 1.26.5
 - **HTTP 框架** [Gin](https://github.com/gin-gonic/gin)
 - **WebSocket** [gorilla/websocket](https://github.com/gorilla/websocket)
 - **数据库** SQLite via [modernc.org/sqlite](https://modernc.org/sqlite)（纯 Go，无需 CGO）
@@ -82,7 +82,7 @@ main.go
 
 ### 环境要求
 
-- Go 1.26.3+
+- Go 1.26.5+
 
 ### 启动
 
@@ -101,9 +101,10 @@ go run .
 
 | 环境变量 | 默认值 | 说明 |
 |----------|--------|------|
-| `PORT`   | `3001` | HTTP 监听端口 |
+| `PORT` | `3001` | HTTP 监听端口 |
+| `TRUST_PROXY` | `false` | 是否信任 `X-Forwarded-For`/`X-Real-IP`；仅在服务只能经可信反向代理访问时开启 |
 
-数据库路径固定为相对于工作目录的 `data/game.db`。
+数据库路径固定为相对于工作目录的 `data/game.db`。单进程 WebSocket 安全上限为 10000 个连接，每个来源 IP 最多 40 个连接。该数值是防护上限而非容量承诺，上线前应针对目标服务器压测。
 
 ## 数据与持久化
 
@@ -115,6 +116,8 @@ go run .
 ### 容器 / 部署
 
 跨重启需要持久化 `data/` 整个目录。
+
+通过反向代理部署时，应禁止公网直接访问应用端口并设置 `TRUST_PROXY=true`。如果客户端可以绕过代理直连应用，不要开启该选项，否则攻击者可以伪造转发头绕过基于 IP 的限制。
 
 ## 构建
 

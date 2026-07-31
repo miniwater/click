@@ -18,9 +18,20 @@ type Client struct {
 	IP    string
 }
 
+type actionRate struct {
+	rateWindow time.Time
+	rateCount  int
+	chatWindow time.Time
+	chatCount  int
+	lastSeen   time.Time
+}
+
 type Hub struct {
-	mu      sync.RWMutex
-	clients map[*Client]bool
+	mu           sync.RWMutex
+	clients      map[*Client]bool
+	admittedByIP map[string]int
+	ratesByIP    map[string]*actionRate
+	admitted     int
 
 	register   chan *Client
 	unregister chan *Client
@@ -31,11 +42,13 @@ type Hub struct {
 
 func NewHub(engine *Engine) *Hub {
 	return &Hub{
-		clients:    make(map[*Client]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan []byte, 256),
-		engine:     engine,
+		clients:      make(map[*Client]bool),
+		admittedByIP: make(map[string]int),
+		ratesByIP:    make(map[string]*actionRate),
+		register:     make(chan *Client),
+		unregister:   make(chan *Client),
+		broadcast:    make(chan []byte, 256),
+		engine:       engine,
 	}
 }
 
@@ -48,10 +61,10 @@ func (h *Hub) Run() {
 			h.mu.Unlock()
 			h.sendStateTo(c)
 			h.broadcastJSON(map[string]any{
-				"type": "notify",
-				"text": c.Name + " 加入了打工现场",
+				"type":  "notify",
+				"text":  c.Name + " 加入了打工现场",
 				"color": c.Color,
-				"name": c.Name,
+				"name":  c.Name,
 			})
 			h.broadcastOnline()
 
@@ -60,13 +73,14 @@ func (h *Hub) Run() {
 			if _, ok := h.clients[c]; ok {
 				delete(h.clients, c)
 				close(c.send)
+				h.releaseLocked(c.IP)
 			}
 			h.mu.Unlock()
 			h.broadcastJSON(map[string]any{
-				"type": "notify",
-				"text": c.Name + " 下班了",
+				"type":  "notify",
+				"text":  c.Name + " 下班了",
 				"color": c.Color,
-				"name": c.Name,
+				"name":  c.Name,
 			})
 			h.broadcastOnline()
 
@@ -84,6 +98,84 @@ func (h *Hub) Run() {
 	}
 }
 
+const (
+	maxConnections      = 10000
+	maxConnectionsPerIP = 40
+)
+
+func (h *Hub) Admit(ip string) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.admitted >= maxConnections || h.admittedByIP[ip] >= maxConnectionsPerIP {
+		return false
+	}
+	h.admitted++
+	h.admittedByIP[ip]++
+	return true
+}
+
+func (h *Hub) Release(ip string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.releaseLocked(ip)
+}
+
+func (h *Hub) releaseLocked(ip string) {
+	if h.admittedByIP[ip] <= 0 {
+		return
+	}
+	h.admitted--
+	h.admittedByIP[ip]--
+	if h.admittedByIP[ip] == 0 {
+		delete(h.admittedByIP, ip)
+	}
+}
+
+func (h *Hub) allowAction(ip, action string, n int) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	now := time.Now()
+	rate := h.ratesByIP[ip]
+	if rate == nil {
+		rate = &actionRate{}
+		h.ratesByIP[ip] = rate
+	}
+	rate.lastSeen = now
+	if rate.rateWindow.IsZero() || now.Sub(rate.rateWindow) >= time.Second {
+		rate.rateWindow = now
+		rate.rateCount = 0
+	}
+	if action == "chat" {
+		if rate.chatWindow.IsZero() || now.Sub(rate.chatWindow) >= 10*time.Second {
+			rate.chatWindow = now
+			rate.chatCount = 0
+		}
+		if rate.chatCount >= 5 {
+			return false
+		}
+		rate.chatCount++
+	}
+	cost := 1
+	if action == "click" {
+		cost = max(1, min(n, 20))
+	}
+	if rate.rateCount+cost > 40 {
+		return false
+	}
+	rate.rateCount += cost
+
+	// Bound memory if many source addresses touch the service over time.
+	if len(h.ratesByIP) > maxConnections*2 {
+		for key, entry := range h.ratesByIP {
+			if now.Sub(entry.lastSeen) > 10*time.Second && h.admittedByIP[key] == 0 {
+				delete(h.ratesByIP, key)
+			}
+		}
+	}
+	return true
+}
+
 func (h *Hub) OnlineCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -91,7 +183,11 @@ func (h *Hub) OnlineCount() int {
 }
 
 func (h *Hub) Broadcast(msg []byte) {
-	h.broadcast <- msg
+	select {
+	case h.broadcast <- msg:
+	default:
+		// Never let a slow/busy hub stall the game action path.
+	}
 }
 
 func (h *Hub) broadcastJSON(v any) {
@@ -99,7 +195,7 @@ func (h *Hub) broadcastJSON(v any) {
 	if err != nil {
 		return
 	}
-	h.broadcast <- b
+	h.Broadcast(b)
 }
 
 func (h *Hub) BroadcastState() {

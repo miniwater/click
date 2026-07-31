@@ -49,17 +49,17 @@ func ThemeColorFromIP(ipStr string) string {
 	sum := sha256.Sum256([]byte(ipStr))
 	h := int(sum[0])<<8 | int(sum[1])
 	hue := h % 360
-	sat := 55 + int(sum[2])%25 // 55-79
+	sat := 55 + int(sum[2])%25   // 55-79
 	light := 45 + int(sum[3])%15 // 45-59
 	return fmt.Sprintf("hsl(%d, %d%%, %d%%)", hue, sat, light)
 }
 
-func ClientIP(remoteAddr, xff, xri string) string {
-	if xff != "" {
+func ClientIP(remoteAddr, xff, xri string, trustProxy bool) string {
+	if trustProxy && xff != "" {
 		parts := strings.Split(xff, ",")
 		return strings.TrimSpace(parts[0])
 	}
-	if xri != "" {
+	if trustProxy && xri != "" {
 		return strings.TrimSpace(xri)
 	}
 	if host, _, err := net.SplitHostPort(remoteAddr); err == nil {

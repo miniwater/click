@@ -261,8 +261,14 @@ type inbound struct {
 }
 
 func (e *Engine) HandleMessage(c *Client, data []byte) {
+	if len(data) > 4096 {
+		return
+	}
 	var msg inbound
 	if err := json.Unmarshal(data, &msg); err != nil {
+		return
+	}
+	if !allowAction(c, msg.Type, msg.N) {
 		return
 	}
 	switch msg.Type {
@@ -277,6 +283,12 @@ func (e *Engine) HandleMessage(c *Client, data []byte) {
 	case "chat":
 		e.doChat(c, msg.Text)
 	}
+}
+
+// Bound action processing per connection so scripts cannot turn one client
+// into an unbounded currency or chat write source.
+func allowAction(c *Client, action string, n int) bool {
+	return c.hub == nil || c.hub.allowAction(c.IP, action, n)
 }
 
 func (e *Engine) doClick(c *Client, n int) {

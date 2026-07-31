@@ -1,6 +1,6 @@
 # 💼 QuanMinDaGong · Clicker Game
 
-[![Go version](https://img.shields.io/badge/go-1.26.3-blue)](go.mod)
+[![Go version](https://img.shields.io/badge/go-1.26.5-blue)](go.mod)
 [![CI](https://github.com/miniwater/click/actions/workflows/ci.yml/badge.svg)](https://github.com/miniwater/click/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -54,7 +54,7 @@ When the server restarts, it computes up to 7 days of missed CPS income and adds
 
 ## Tech Stack
 
-- **Language** Go 1.26.3
+- **Language** Go 1.26.5
 - **HTTP Framework** [Gin](https://github.com/gin-gonic/gin)
 - **WebSocket** [gorilla/websocket](https://github.com/gorilla/websocket)
 - **Database** SQLite via [modernc.org/sqlite](https://modernc.org/sqlite) (pure-Go, no CGO needed)
@@ -83,7 +83,7 @@ The game is **global, not per-user**. Every WebSocket client reads and mutates a
 
 ### Prerequisites
 
-- Go 1.26.3+
+- Go 1.26.5+
 
 ### Run
 
@@ -102,9 +102,10 @@ Visit [http://localhost:3001](http://localhost:3001).
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `PORT`   | `3001`  | HTTP listen port |
+| `PORT` | `3001` | HTTP listen port |
+| `TRUST_PROXY` | `false` | Trust `X-Forwarded-For`/`X-Real-IP`; enable only when the server is reachable exclusively through a trusted reverse proxy |
 
-No other configuration knobs are exposed at runtime. The database path is fixed to `data/game.db` relative to the working directory.
+The database path is fixed to `data/game.db` relative to the working directory. WebSocket protection limits a single process to 10,000 connections and each source IP to 40 connections. These are safety ceilings, not capacity guarantees; load-test the target host before production traffic.
 
 ## Data & Persistence
 
@@ -116,6 +117,8 @@ No other configuration knobs are exposed at runtime. The database path is fixed 
 ### Container / Deployment
 
 Persist the entire `data/` directory across restarts to preserve progress.
+
+When deploying behind a reverse proxy, keep the application port private and set `TRUST_PROXY=true`. Do not enable it when clients can reach the application directly, because clients could spoof forwarding headers and bypass IP-based controls.
 
 ## Building
 

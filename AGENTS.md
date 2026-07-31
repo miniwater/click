@@ -2,7 +2,7 @@
 
 ## Commands
 
-- This module requires Go 1.26.3 (`go.mod`). Run commands from the repository root; the server opens `data/game.db` relative to the current working directory.
+- This module requires Go 1.26.5 (`go.mod`). Run commands from the repository root; the server opens `data/game.db` relative to the current working directory.
 - Start locally with `go run .`; it listens on `:3001` unless `PORT` is set.
 - Run all checks with `gofmt -w <changed .go files>`, then `go vet ./...`, then `go test ./...`.
 - Run the only test package with `go test ./game`; focus a test with `go test ./game -run '^TestName$'`.

@@ -277,7 +277,9 @@ func (e *Engine) HandleMessage(c *Client, data []byte) {
 	case "buy":
 		e.doBuy(c, msg.ID, msg.N)
 	case "upgrade_click":
-		e.doUpgradeClick(c, msg.N)
+		e.doUpgradeClick(c, actionCount(msg.N))
+	case "upgrade_click_100":
+		e.doUpgradeClick(c, actionCount(msg.N)*100)
 	case "enhance":
 		e.doEnhance(c, msg.ID, msg.N)
 	case "chat":
@@ -396,7 +398,7 @@ func (e *Engine) doBuy(c *Client, id, n int) {
 func (e *Engine) doUpgradeClick(c *Client, n int) {
 	e.mu.Lock()
 	upgraded := 0
-	for range actionCount(n) {
+	for range n {
 		if e.gold.Cmp(e.clickCost) < 0 {
 			break
 		}

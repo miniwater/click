@@ -132,6 +132,11 @@ func (h *Hub) releaseLocked(ip string) {
 }
 
 func (h *Hub) allowAction(ip, action string, n int) bool {
+	switch action {
+	case "buy", "upgrade_click", "upgrade_click_100", "enhance":
+		return true
+	}
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -157,8 +162,7 @@ func (h *Hub) allowAction(ip, action string, n int) bool {
 		rate.chatCount++
 	}
 	cost := 1
-	switch action {
-	case "click", "buy", "upgrade_click", "enhance":
+	if action == "click" {
 		cost = actionCount(n)
 	}
 	if rate.rateCount+cost > 40 {

@@ -33,11 +33,13 @@ func TestAllowActionLimitsChatAndActions(t *testing.T) {
 	}
 
 	c = &Client{hub: NewHub(nil), IP: "203.0.113.1"}
-	if !allowAction(c, "enhance", 20) || !allowAction(c, "upgrade_click", 20) {
-		t.Fatal("two batched upgrades should fit the action budget")
+	for i := 0; i < 100; i++ {
+		if !allowAction(c, "buy", 20) || !allowAction(c, "upgrade_click", 20) || !allowAction(c, "upgrade_click_100", 20) || !allowAction(c, "enhance", 20) {
+			t.Fatalf("upgrade action %d was unexpectedly limited", i)
+		}
 	}
-	if allowAction(c, "buy", 1) {
-		t.Fatal("batched upgrades did not consume the action budget")
+	if !allowAction(c, "click", 20) || !allowAction(c, "click", 20) {
+		t.Fatal("upgrade actions consumed the click action budget")
 	}
 }
 

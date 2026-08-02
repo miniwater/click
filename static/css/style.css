@@ -284,6 +284,7 @@ button, a, input { touch-action: manipulation; }
   opacity: 0.4; cursor: not-allowed;
 }
 .buy-btn.afford { background: linear-gradient(135deg, #5d8cff, #7a5dff); box-shadow: 0 0 12px rgba(108,140,255,0.35); }
+.click-up-actions { display: flex; gap: 6px; flex: 0 0 auto; }
 .enh-btn {
   background: linear-gradient(135deg, #3ec7ff, #7a8cff);
   margin-left: 6px;

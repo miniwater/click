@@ -31,6 +31,12 @@ func TestUpgradeActionsProcessBatchWithOneBroadcast(t *testing.T) {
 	}
 	assertBroadcastCount(t, hub, 2)
 
+	e.HandleMessage(client, []byte(`{"type":"upgrade_click_100"}`))
+	if e.clickLevel != 105 {
+		t.Fatalf("click level = %d, want 105", e.clickLevel)
+	}
+	assertBroadcastCount(t, hub, 2)
+
 	e.doEnhance(client, FacilityDefs[0].ID, 20)
 	if e.facilities[0].Enhance != 3 || e.diamonds != 0 {
 		t.Fatalf("enhance = %d, diamonds = %d, want 3 and 0", e.facilities[0].Enhance, e.diamonds)

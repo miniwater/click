@@ -11,6 +11,7 @@
   const clickLv = $("clickLv");
   const clickCost = $("clickCost");
   const upgradeClickBtn = $("upgradeClickBtn");
+  const upgradeClick100Btn = $("upgradeClick100Btn");
   const facilityList = $("facilityList");
   const facilityPrev = $("facilityPrev");
   const facilityNext = $("facilityNext");
@@ -48,9 +49,16 @@
   let upgradeFlushTimer = null;
   let upgradeBurst = 0;
   let suppressUpgradeClick = false;
+  let upgrade100HoldTimer = null;
+  let upgrade100RepeatTimer = null;
+  let upgrade100FlushTimer = null;
+  let upgrade100Burst = 0;
+  let suppressUpgrade100Click = false;
   const facilitiesPerPage = 30;
   const facilityPageNames = ["科技", "修仙", "魔法"];
   const clickFlushInterval = 300;
+  const click100CostNumerator = 21n ** 100n - 20n ** 100n;
+  const click100CostDenominator = 20n ** 99n;
   let facilityPage = null;
 
   function fmt(n) {
@@ -93,12 +101,34 @@
   function compareDecimal(a, b) {
     const av = parseDecimal(a);
     const bv = parseDecimal(b);
+    return compareParsedDecimal(av, bv);
+  }
+
+  function compareParsedDecimal(av, bv) {
     if (av.zero || bv.zero) return av.zero === bv.zero ? 0 : av.zero ? -1 : 1;
     if (av.exponent !== bv.exponent) return av.exponent > bv.exponent ? 1 : -1;
     const width = Math.max(av.digits.length, bv.digits.length);
     const ap = av.digits.padEnd(width, "0");
     const bp = bv.digits.padEnd(width, "0");
     return ap === bp ? 0 : ap > bp ? 1 : -1;
+  }
+
+  function multiplyDecimalByInteger(value, multiplier) {
+    const parsed = parseDecimal(value);
+    if (parsed.zero || multiplier === 0n) return { zero: true, digits: "0", exponent: 0 };
+    const digits = (BigInt(parsed.digits) * multiplier).toString();
+    return {
+      zero: false,
+      digits,
+      exponent: parsed.exponent + digits.length - parsed.digits.length,
+    };
+  }
+
+  function canAffordClick100(gold, cost) {
+    return compareParsedDecimal(
+      multiplyDecimalByInteger(gold, click100CostDenominator),
+      multiplyDecimalByInteger(cost, click100CostNumerator)
+    ) >= 0;
   }
 
   function unitName(group) {
@@ -125,8 +155,11 @@
     clickLv.textContent = "Lv." + s.clickLevel;
     clickCost.textContent = "🪙 " + fmt(s.clickCost);
     const canUpgradeClick = compareDecimal(s.gold, s.clickCost) >= 0;
+    const canUpgradeClick100 = canAffordClick100(s.gold, s.clickCost);
     upgradeClickBtn.disabled = !canUpgradeClick;
     upgradeClickBtn.classList.toggle("afford", canUpgradeClick);
+    upgradeClick100Btn.disabled = !canUpgradeClick100;
+    upgradeClick100Btn.classList.toggle("afford", canUpgradeClick100);
     renderFacilities();
   }
 
@@ -336,6 +369,53 @@
   window.addEventListener("pointerup", stopUpgradeHold);
   window.addEventListener("pointercancel", stopUpgradeHold);
   window.addEventListener("blur", stopUpgradeHold);
+
+  upgradeClick100Btn.addEventListener("click", () => {
+    if (suppressUpgrade100Click) {
+      suppressUpgrade100Click = false;
+      return;
+    }
+    send({ type: "upgrade_click_100" });
+  });
+
+  function stopUpgrade100Hold() {
+    clearTimeout(upgrade100HoldTimer);
+    clearInterval(upgrade100RepeatTimer);
+    clearInterval(upgrade100FlushTimer);
+    upgrade100HoldTimer = null;
+    upgrade100RepeatTimer = null;
+    upgrade100FlushTimer = null;
+    if (upgrade100Burst > 0) {
+      send({ type: "upgrade_click_100", n: upgrade100Burst });
+      upgrade100Burst = 0;
+    }
+  }
+
+  upgradeClick100Btn.addEventListener("pointerdown", () => {
+    if (upgradeClick100Btn.disabled) return;
+    suppressUpgrade100Click = false;
+    stopUpgrade100Hold();
+    upgrade100FlushTimer = setInterval(() => {
+      if (upgrade100Burst <= 0) return;
+      send({ type: "upgrade_click_100", n: upgrade100Burst });
+      upgrade100Burst = 0;
+    }, clickFlushInterval);
+    upgrade100HoldTimer = setTimeout(() => {
+      suppressUpgrade100Click = true;
+      upgrade100Burst++;
+      upgrade100RepeatTimer = setInterval(() => {
+        if (upgradeClick100Btn.disabled) {
+          stopUpgrade100Hold();
+          return;
+        }
+        upgrade100Burst++;
+      }, 50);
+    }, 400);
+  });
+
+  window.addEventListener("pointerup", stopUpgrade100Hold);
+  window.addEventListener("pointercancel", stopUpgrade100Hold);
+  window.addEventListener("blur", stopUpgrade100Hold);
 
   function floatText(text, x, y, cls) {
     const el = document.createElement("div");

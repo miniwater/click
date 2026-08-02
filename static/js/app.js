@@ -34,6 +34,9 @@
   let buyHoldTimer = null;
   let buyRepeatTimer = null;
   let suppressBuyClick = false;
+  let enhanceHoldTimer = null;
+  let enhanceRepeatTimer = null;
+  let suppressEnhanceClick = false;
   let upgradeHoldTimer = null;
   let upgradeRepeatTimer = null;
   let suppressUpgradeClick = false;
@@ -186,7 +189,13 @@
       }
       send({ type: "buy", id });
     }
-    if (btn.dataset.act === "enhance") send({ type: "enhance", id });
+    if (btn.dataset.act === "enhance") {
+      if (suppressEnhanceClick) {
+        suppressEnhanceClick = false;
+        return;
+      }
+      send({ type: "enhance", id });
+    }
   });
 
   function stopBuyHold() {
@@ -213,6 +222,37 @@
   window.addEventListener("pointerup", stopBuyHold);
   window.addEventListener("pointercancel", stopBuyHold);
   window.addEventListener("blur", stopBuyHold);
+
+  function stopEnhanceHold() {
+    clearTimeout(enhanceHoldTimer);
+    clearInterval(enhanceRepeatTimer);
+    enhanceHoldTimer = null;
+    enhanceRepeatTimer = null;
+  }
+
+  facilityList.addEventListener("pointerdown", (e) => {
+    const btn = e.target.closest('button[data-act="enhance"]');
+    if (!btn || btn.disabled) return;
+
+    const id = +btn.dataset.id;
+    suppressEnhanceClick = false;
+    stopEnhanceHold();
+    enhanceHoldTimer = setTimeout(() => {
+      suppressEnhanceClick = true;
+      send({ type: "enhance", id });
+      enhanceRepeatTimer = setInterval(() => {
+        if (!state || state.diamonds < 1) {
+          stopEnhanceHold();
+          return;
+        }
+        send({ type: "enhance", id });
+      }, 150);
+    }, 400);
+  });
+
+  window.addEventListener("pointerup", stopEnhanceHold);
+  window.addEventListener("pointercancel", stopEnhanceHold);
+  window.addEventListener("blur", stopEnhanceHold);
 
   upgradeClickBtn.addEventListener("click", () => {
     if (suppressUpgradeClick) {

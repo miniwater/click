@@ -18,16 +18,16 @@ func TestEngineDerivedCacheTracksMutations(t *testing.T) {
 	e.initializeDerived()
 	assertDerivedCache(t, e)
 
-	e.doBuy(&Client{}, FacilityDefs[0].ID)
+	e.doBuy(&Client{}, FacilityDefs[0].ID, 1)
 	assertDerivedCache(t, e)
 
-	e.doBuy(&Client{}, FacilityDefs[20].ID)
+	e.doBuy(&Client{}, FacilityDefs[20].ID, 1)
 	assertDerivedCache(t, e)
 
-	e.doEnhance(&Client{}, FacilityDefs[0].ID)
+	e.doEnhance(&Client{}, FacilityDefs[0].ID, 1)
 	assertDerivedCache(t, e)
 
-	e.doUpgradeClick(&Client{})
+	e.doUpgradeClick(&Client{}, 1)
 	assertDerivedCache(t, e)
 }
 

@@ -31,6 +31,14 @@ func TestAllowActionLimitsChatAndActions(t *testing.T) {
 	if allowAction(c, "click", 20) {
 		t.Fatal("third batched click exceeded the action budget")
 	}
+
+	c = &Client{hub: NewHub(nil), IP: "203.0.113.1"}
+	if !allowAction(c, "enhance", 20) || !allowAction(c, "upgrade_click", 20) {
+		t.Fatal("two batched upgrades should fit the action budget")
+	}
+	if allowAction(c, "buy", 1) {
+		t.Fatal("batched upgrades did not consume the action budget")
+	}
 }
 
 func TestAllowActionIsSharedByIPAcrossConnections(t *testing.T) {

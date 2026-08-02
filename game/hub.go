@@ -157,8 +157,9 @@ func (h *Hub) allowAction(ip, action string, n int) bool {
 		rate.chatCount++
 	}
 	cost := 1
-	if action == "click" {
-		cost = max(1, min(n, 20))
+	switch action {
+	case "click", "buy", "upgrade_click", "enhance":
+		cost = actionCount(n)
 	}
 	if rate.rateCount+cost > 40 {
 		return false

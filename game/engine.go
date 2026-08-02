@@ -275,11 +275,11 @@ func (e *Engine) HandleMessage(c *Client, data []byte) {
 	case "click":
 		e.doClick(c, msg.N)
 	case "buy":
-		e.doBuy(c, msg.ID)
+		e.doBuy(c, msg.ID, msg.N)
 	case "upgrade_click":
-		e.doUpgradeClick(c)
+		e.doUpgradeClick(c, msg.N)
 	case "enhance":
-		e.doEnhance(c, msg.ID)
+		e.doEnhance(c, msg.ID, msg.N)
 	case "chat":
 		e.doChat(c, msg.Text)
 	}
@@ -350,7 +350,14 @@ func (e *Engine) flushClickResults() {
 	e.hub.Broadcast(b)
 }
 
-func (e *Engine) doBuy(c *Client, id int) {
+func actionCount(n int) int {
+	if n <= 0 {
+		return 1
+	}
+	return min(n, 20)
+}
+
+func (e *Engine) doBuy(c *Client, id, n int) {
 	e.mu.Lock()
 	idx := facilityIndex(id)
 	if idx < 0 {
@@ -358,16 +365,22 @@ func (e *Engine) doBuy(c *Client, id int) {
 		return
 	}
 	def := FacilityDefs[idx]
-	derived := &e.derived[idx]
-	cost := derived.cost
-	if e.gold.Cmp(cost) < 0 {
+	bought := 0
+	for range actionCount(n) {
+		cost := e.derived[idx].cost
+		if e.gold.Cmp(cost) < 0 {
+			break
+		}
+		e.gold.Sub(e.gold, cost)
+		e.facilities[idx].Owned++
+		e.refreshFacilityDerived(idx)
+		bought++
+	}
+	if bought == 0 {
 		e.mu.Unlock()
 		e.sendError(c, "金币不够，继续打工吧")
 		return
 	}
-	e.gold.Sub(e.gold, cost)
-	e.facilities[idx].Owned++
-	e.refreshFacilityDerived(idx)
 	e.dirty = true
 	owned := e.facilities[idx].Owned
 	state := e.snapshotLocked()
@@ -380,18 +393,24 @@ func (e *Engine) doBuy(c *Client, id int) {
 	}
 }
 
-func (e *Engine) doUpgradeClick(c *Client) {
+func (e *Engine) doUpgradeClick(c *Client, n int) {
 	e.mu.Lock()
-	cost := e.clickCost
-	if e.gold.Cmp(cost) < 0 {
+	upgraded := 0
+	for range actionCount(n) {
+		if e.gold.Cmp(e.clickCost) < 0 {
+			break
+		}
+		e.gold.Sub(e.gold, e.clickCost)
+		e.clickLevel++
+		e.clickPower = ClickPower(e.clickLevel)
+		e.clickCost = ClickUpgradeCost(e.clickLevel)
+		upgraded++
+	}
+	if upgraded == 0 {
 		e.mu.Unlock()
 		e.sendError(c, "金币不够升级点击")
 		return
 	}
-	e.gold.Sub(e.gold, cost)
-	e.clickLevel++
-	e.clickPower = ClickPower(e.clickLevel)
-	e.clickCost = ClickUpgradeCost(e.clickLevel)
 	e.clickPowerText = e.clickPower.String()
 	e.clickCostText = e.clickCost.String()
 	e.dirty = true
@@ -406,7 +425,7 @@ func (e *Engine) doUpgradeClick(c *Client) {
 	}
 }
 
-func (e *Engine) doEnhance(c *Client, id int) {
+func (e *Engine) doEnhance(c *Client, id, n int) {
 	e.mu.Lock()
 	idx := facilityIndex(id)
 	if idx < 0 {
@@ -418,13 +437,14 @@ func (e *Engine) doEnhance(c *Client, id int) {
 		e.sendError(c, "先购买该设施再强化")
 		return
 	}
-	if e.diamonds < 1 {
+	count := min(actionCount(n), e.diamonds)
+	if count < 1 {
 		e.mu.Unlock()
 		e.sendError(c, "钻石不足")
 		return
 	}
-	e.diamonds--
-	e.facilities[idx].Enhance++
+	e.diamonds -= count
+	e.facilities[idx].Enhance += count
 	e.refreshFacilityDerived(idx)
 	e.dirty = true
 	enhance := e.facilities[idx].Enhance

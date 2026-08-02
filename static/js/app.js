@@ -33,12 +33,20 @@
   let mouseFlushTimer = null;
   let buyHoldTimer = null;
   let buyRepeatTimer = null;
+  let buyFlushTimer = null;
+  let buyBurst = 0;
+  let buyHoldID = 0;
   let suppressBuyClick = false;
   let enhanceHoldTimer = null;
   let enhanceRepeatTimer = null;
+  let enhanceFlushTimer = null;
+  let enhanceBurst = 0;
+  let enhanceHoldID = 0;
   let suppressEnhanceClick = false;
   let upgradeHoldTimer = null;
   let upgradeRepeatTimer = null;
+  let upgradeFlushTimer = null;
+  let upgradeBurst = 0;
   let suppressUpgradeClick = false;
   const facilitiesPerPage = 30;
   const facilityPageNames = ["科技", "修仙", "魔法"];
@@ -127,7 +135,11 @@
     const defs = state.facilityDefs || [];
     const facs = state.facilities || [];
     const pageCount = Math.max(1, Math.ceil(defs.length / facilitiesPerPage));
-    if (facilityPage == null) facilityPage = pageCount - 1;
+    if (facilityPage == null) {
+      const facilitiesByID = new Map(facs.map((f) => [f.id, f]));
+      const lastEnabledIndex = defs.findLastIndex((d) => (facilitiesByID.get(d.id)?.owned || 0) > 0);
+      facilityPage = lastEnabledIndex < 0 ? 0 : Math.floor(lastEnabledIndex / facilitiesPerPage);
+    }
     facilityPage = Math.max(0, Math.min(facilityPage, pageCount - 1));
     const pageName = facilityPageNames[facilityPage];
     facilityPageLabel.textContent = `${pageName ? `${pageName} · ` : ""}${facilityPage + 1} / ${pageCount}`;
@@ -201,8 +213,14 @@
   function stopBuyHold() {
     clearTimeout(buyHoldTimer);
     clearInterval(buyRepeatTimer);
+    clearInterval(buyFlushTimer);
     buyHoldTimer = null;
     buyRepeatTimer = null;
+    buyFlushTimer = null;
+    if (buyBurst > 0) {
+      send({ type: "buy", id: buyHoldID, n: buyBurst });
+      buyBurst = 0;
+    }
   }
 
   facilityList.addEventListener("pointerdown", (e) => {
@@ -212,10 +230,16 @@
     const id = +btn.dataset.id;
     suppressBuyClick = false;
     stopBuyHold();
+    buyHoldID = id;
+    buyFlushTimer = setInterval(() => {
+      if (buyBurst <= 0) return;
+      send({ type: "buy", id: buyHoldID, n: buyBurst });
+      buyBurst = 0;
+    }, clickFlushInterval);
     buyHoldTimer = setTimeout(() => {
       suppressBuyClick = true;
-      send({ type: "buy", id });
-      buyRepeatTimer = setInterval(() => send({ type: "buy", id }), 150);
+      buyBurst++;
+      buyRepeatTimer = setInterval(() => buyBurst++, 50);
     }, 400);
   });
 
@@ -226,8 +250,14 @@
   function stopEnhanceHold() {
     clearTimeout(enhanceHoldTimer);
     clearInterval(enhanceRepeatTimer);
+    clearInterval(enhanceFlushTimer);
     enhanceHoldTimer = null;
     enhanceRepeatTimer = null;
+    enhanceFlushTimer = null;
+    if (enhanceBurst > 0) {
+      send({ type: "enhance", id: enhanceHoldID, n: enhanceBurst });
+      enhanceBurst = 0;
+    }
   }
 
   facilityList.addEventListener("pointerdown", (e) => {
@@ -237,16 +267,22 @@
     const id = +btn.dataset.id;
     suppressEnhanceClick = false;
     stopEnhanceHold();
+    enhanceHoldID = id;
+    enhanceFlushTimer = setInterval(() => {
+      if (enhanceBurst <= 0) return;
+      send({ type: "enhance", id: enhanceHoldID, n: enhanceBurst });
+      enhanceBurst = 0;
+    }, clickFlushInterval);
     enhanceHoldTimer = setTimeout(() => {
       suppressEnhanceClick = true;
-      send({ type: "enhance", id });
+      enhanceBurst++;
       enhanceRepeatTimer = setInterval(() => {
         if (!state || state.diamonds < 1) {
           stopEnhanceHold();
           return;
         }
-        send({ type: "enhance", id });
-      }, 150);
+        enhanceBurst++;
+      }, 50);
     }, 400);
   });
 
@@ -265,24 +301,35 @@
   function stopUpgradeHold() {
     clearTimeout(upgradeHoldTimer);
     clearInterval(upgradeRepeatTimer);
+    clearInterval(upgradeFlushTimer);
     upgradeHoldTimer = null;
     upgradeRepeatTimer = null;
+    upgradeFlushTimer = null;
+    if (upgradeBurst > 0) {
+      send({ type: "upgrade_click", n: upgradeBurst });
+      upgradeBurst = 0;
+    }
   }
 
   upgradeClickBtn.addEventListener("pointerdown", () => {
     if (upgradeClickBtn.disabled) return;
     suppressUpgradeClick = false;
     stopUpgradeHold();
+    upgradeFlushTimer = setInterval(() => {
+      if (upgradeBurst <= 0) return;
+      send({ type: "upgrade_click", n: upgradeBurst });
+      upgradeBurst = 0;
+    }, clickFlushInterval);
     upgradeHoldTimer = setTimeout(() => {
       suppressUpgradeClick = true;
-      send({ type: "upgrade_click" });
+      upgradeBurst++;
       upgradeRepeatTimer = setInterval(() => {
         if (upgradeClickBtn.disabled) {
           stopUpgradeHold();
           return;
         }
-        send({ type: "upgrade_click" });
-      }, 150);
+        upgradeBurst++;
+      }, 50);
     }, 400);
   });
 
